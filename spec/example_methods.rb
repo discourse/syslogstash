@@ -1,0 +1,2 @@
+module ExampleMethods
+end

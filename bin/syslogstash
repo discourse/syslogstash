@@ -1,0 +1,51 @@
+#!/usr/bin/env ruby
+
+require 'syslogstash'
+require 'yaml'
+
+if ARGV.length != 1
+	$stderr.puts <<-EOF.gsub(/^\t\t/, '')
+		Invalid usage
+
+		Usage:
+		  #{$0} <configfile>
+	EOF
+
+	exit 1
+end
+
+unless File.exist?(ARGV[0])
+	$stderr.puts "Config file #{ARGV[0]} does not exist"
+	exit 1
+end
+
+unless File.readable?(ARGV[0])
+	$stderr.puts "Config file #{ARGV[0]} not readable"
+	exit 1
+end
+
+cfg = YAML.load_file(ARGV[0])
+
+unless cfg.is_a? Hash
+	$stderr.puts "Config file #{ARGV[0]} does not contain a YAML hash"
+	exit 1
+end
+
+%w{sockets servers}.each do |section|
+	unless cfg.has_key?(section)
+		$stderr.puts "Config file #{ARGV[0]} does not have a '#{section}' section"
+		exit 1
+	end
+
+	unless cfg[section].respond_to?(:empty?)
+		$stderr.puts "Config file #{ARGV[0]} has a malformed '#{section}' section"
+		exit 1
+	end
+
+	if cfg[section].empty?
+		$stderr.puts "Config file #{ARGV[0]} has an empty '#{section}' section"
+		exit 1
+	end
+end
+
+Syslogstash.new(cfg['sockets'], cfg['servers']).run
