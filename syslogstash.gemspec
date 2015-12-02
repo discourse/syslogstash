@@ -21,7 +21,7 @@ Gem::Specification.new do |s|
 	s.files = `git ls-files -z`.split("\0").reject { |f| f =~ /^(G|spec|Rakefile)/ }
 	s.executables = ["syslogstash"]
 
-	s.required_ruby_version = ">= 2.1.0"
+	s.required_ruby_version = ">= 2.0.0"
 
 	s.add_development_dependency 'bundler'
 	s.add_development_dependency 'github-release'
