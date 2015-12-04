@@ -16,6 +16,10 @@ class Syslogstash::SyslogReader
 	def run
 		debug { "#run called" }
 
+		if File.exists?(@file)
+			File.unlink(@file)
+		end
+
 		socket = Socket.new(Socket::AF_UNIX, Socket::SOCK_DGRAM, 0)
 		socket.bind(Socket.pack_sockaddr_un(@file))
 
