@@ -16,12 +16,16 @@ class Syslogstash::SyslogReader
 	def run
 		debug { "#run called" }
 
-		if File.exists?(@file)
+		begin
+			socket = Socket.new(Socket::AF_UNIX, Socket::SOCK_DGRAM, 0)
+			socket.bind(Socket.pack_sockaddr_un(@file))
+		rescue Errno::EEXIST
 			File.unlink(@file)
+			retry
+		rescue SystemCallError
+			$stderr.puts "Error while trying to bind to #{@file}"
+			raise
 		end
-
-		socket = Socket.new(Socket::AF_UNIX, Socket::SOCK_DGRAM, 0)
-		socket.bind(Socket.pack_sockaddr_un(@file))
 
 		@worker = Thread.new do
 			begin
