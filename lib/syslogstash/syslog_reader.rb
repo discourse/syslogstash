@@ -19,8 +19,8 @@ class Syslogstash::SyslogReader
 		begin
 			socket = Socket.new(Socket::AF_UNIX, Socket::SOCK_DGRAM, 0)
 			socket.bind(Socket.pack_sockaddr_un(@file))
-		rescue Errno::EEXIST
-			File.unlink(@file)
+		rescue Errno::EEXIST, Errno::EADDRINUSE
+			File.unlink(@file) rescue nil
 			retry
 		rescue SystemCallError
 			$stderr.puts "Error while trying to bind to #{@file}"
@@ -74,7 +74,7 @@ class Syslogstash::SyslogReader
 				facility:         facility,
 				hostname:         hostname,
 				program:          program,
-				pid:              pid,
+				pid:              pid.nil? ? nil : pid.to_i,
 				message:          message,
 			).to_json
 
@@ -89,12 +89,10 @@ class Syslogstash::SyslogReader
 			e['@version']   = '1'
 			e['@timestamp'] = Time.now.utc.strftime("%FT%T.%LZ")
 
-			h['facility_name'] = FACILITIES[h[:facility]]
-			h['severity_name'] = SEVERITIES[h[:severity]]
+			h[:facility_name] = FACILITIES[h[:facility]]
+			h[:severity_name] = SEVERITIES[h[:severity]]
 
 			e.merge!(h.delete_if { |k,v| v.nil? })
-
-			e[:pid] = e[:pid].to_i if e.has_key?(:pid)
 
 			e.merge!(@tags) if @tags.is_a? Hash
 
