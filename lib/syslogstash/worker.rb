@@ -18,6 +18,10 @@ module Syslogstash::Worker
 
 	private
 
+	def log
+		puts "#{Time.now.strftime("%F %T.%L")} #{self.class} #{yield.to_s}"
+	end
+
 	def debug
 		if ENV['DEBUG_SYSLOGSTASH']
 			puts "#{Time.now.strftime("%F %T.%L")} #{self.class} #{yield.to_s}"

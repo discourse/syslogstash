@@ -20,6 +20,7 @@ class Syslogstash::SyslogReader
 			socket = Socket.new(Socket::AF_UNIX, Socket::SOCK_DGRAM, 0)
 			socket.bind(Socket.pack_sockaddr_un(@file))
 		rescue Errno::EEXIST, Errno::EADDRINUSE
+			log { "socket file #{@file} already exists; deleting"
 			File.unlink(@file) rescue nil
 			retry
 		rescue SystemCallError
@@ -36,6 +37,7 @@ class Syslogstash::SyslogReader
 				end
 			ensure
 				socket.close
+				log { "removing socket file #{@file}"
 				File.unlink(@file) rescue nil
 			end
 		end
