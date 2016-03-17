@@ -1,4 +1,7 @@
 require_relative 'worker'
+require_relative '../cbuffer'
+
+BUFFER_SIZE = 10**6
 
 # Write messages to one of a collection of logstash servers.
 #
@@ -18,7 +21,7 @@ class Syslogstash::LogstashWriter
 					"Unsupported URL scheme: #{@servers.select { |url| url.scheme != 'tcp' }.join(', ')}"
 		end
 
-		@entries = []
+		@entries = CBuffer.new(BUFFER_SIZE)
 		@entries_mutex = Mutex.new
 	end
 
@@ -27,7 +30,7 @@ class Syslogstash::LogstashWriter
 	# #run.
 	#
 	def send_entry(e)
-		@entries_mutex.synchronize { @entries << e }
+		@entries_mutex.synchronize { @entries.put e }
 		@worker.run if @worker
 	end
 
@@ -47,7 +50,7 @@ class Syslogstash::LogstashWriter
 				sleep 1
 			else
 				begin
-					entry = @entries_mutex.synchronize { @entries.shift }
+					entry = @entries_mutex.synchronize { @entries.get }
 
 					current_server do |s|
 						s.puts entry
@@ -60,7 +63,7 @@ class Syslogstash::LogstashWriter
 					$stderr.puts "Unhandled exception: #{ex.message} (#{ex.class})"
 					$stderr.puts ex.backtrace.map { |l| "  #{l}" }.join("\n")
 				ensure
-					@entries_mutex.synchronize { @entries.unshift if entry }
+					@entries_mutex.synchronize { @entries.unget entry if entry }
 				end
 			end
 		end
