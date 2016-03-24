@@ -48,4 +48,6 @@ end
 	end
 end
 
-Syslogstash.new(cfg['sockets'], cfg['servers']).run
+cfg['buffersize'] = 1000000 unless cfg.has_key?('buffersize')
+
+Syslogstash.new(cfg['sockets'], cfg['servers'], cfg['buffersize']).run
