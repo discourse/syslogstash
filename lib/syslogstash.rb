@@ -6,8 +6,8 @@ require 'json'
 # server.
 #
 class Syslogstash
-	def initialize(sockets, servers)
-		@writer = LogstashWriter.new(servers)
+	def initialize(sockets, servers, buffersize)
+		@writer = LogstashWriter.new(servers, buffersize)
 
 		@readers = sockets.map { |f, tags| SyslogReader.new(f, tags, @writer) }
 	end
