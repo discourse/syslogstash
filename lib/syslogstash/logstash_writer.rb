@@ -10,8 +10,8 @@ class Syslogstash::LogstashWriter
 	# Give it a list of servers, and your writer will be ready to go.
 	# No messages will actually be *delivered*, though, until you call #run.
 	#
-	def initialize(servers)
-		@servers = servers.map { |s| URI(s) }
+	def initialize(servers, backlog)
+		@servers, @backlog = servers.map { |s| URI(s) }, @backlog
 
 		unless @servers.all? { |url| url.scheme == 'tcp' }
 			raise ArgumentError,
@@ -27,7 +27,10 @@ class Syslogstash::LogstashWriter
 	# #run.
 	#
 	def send_entry(e)
-		@entries_mutex.synchronize { @entries << e }
+		@entries_mutex.synchronize do
+			@entries << e
+			@entries.shift while @entries.length > @backlog
+		end
 		@worker.run if @worker
 	end
 

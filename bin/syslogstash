@@ -48,4 +48,4 @@ end
 	end
 end
 
-Syslogstash.new(cfg['sockets'], cfg['servers']).run
+Syslogstash.new(cfg['sockets'], cfg['servers'], cfg.fetch('backlog', 1_000_000)).run
