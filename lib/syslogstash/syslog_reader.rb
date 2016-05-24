@@ -5,8 +5,12 @@ require_relative 'worker'
 class Syslogstash::SyslogReader
 	include Syslogstash::Worker
 
+	attr_reader :file
+
 	def initialize(file, tags, logstash)
 		@file, @tags, @logstash = file, tags, logstash
+
+		log { "initializing syslog socket #{file} with tags #{tags.inspect}" }
 	end
 
 	# Start reading from the socket file, parsing entries, and flinging

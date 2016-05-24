@@ -11,7 +11,7 @@ class Syslogstash::LogstashWriter
 	# No messages will actually be *delivered*, though, until you call #run.
 	#
 	def initialize(servers, backlog)
-		@servers, @backlog = servers.map { |s| URI(s) }, @backlog
+		@servers, @backlog = servers.map { |s| URI(s) }, backlog
 
 		unless @servers.all? { |url| url.scheme == 'tcp' }
 			raise ArgumentError,

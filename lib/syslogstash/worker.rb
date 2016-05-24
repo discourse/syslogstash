@@ -10,6 +10,10 @@ module Syslogstash::Worker
 		end
 	end
 
+	def thread
+		@worker
+	end
+
 	# If you want to wait for a reader to die, here's how.
 	#
 	def wait
@@ -19,12 +23,12 @@ module Syslogstash::Worker
 	private
 
 	def log
-		puts "#{Time.now.strftime("%F %T.%L")} #{self.class} #{yield.to_s}"
+		$stderr.puts "#{Time.now.strftime("%F %T.%L")} #{self.class} #{yield.to_s}"
 	end
 
 	def debug
 		if ENV['DEBUG_SYSLOGSTASH']
-			puts "#{Time.now.strftime("%F %T.%L")} #{self.class} #{yield.to_s}"
+			$stderr.puts "#{Time.now.strftime("%F %T.%L")} #{self.class} #{yield.to_s}"
 		end
 	end
 end

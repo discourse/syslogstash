@@ -1,6 +1,7 @@
 require 'uri'
 require 'socket'
 require 'json'
+require 'thwait'
 
 # Read syslog messages from one or more sockets, and send it to a logstash
 # server.
@@ -16,8 +17,27 @@ class Syslogstash
 		@writer.run
 		@readers.each { |w| w.run }
 
-		@writer.wait
-		@readers.each { |w| w.wait }
+		tw = ThreadsWait.new(@writer.thread, *(@readers.map { |r| r.thread }))
+
+		dead_thread = tw.next_wait
+
+		if dead_thread == @writer.thread
+			$stderr.puts "Writer thread crashed."
+			exit 1
+		else
+			reader = @readers.find { |r| r.thread == dead_thread }
+
+			$stderr.puts "Reader thread for #{reader.file} crashed."
+		end
+
+		begin
+			dead_thread.join
+		rescue Exception => ex
+			$stderr.puts "Exception in worker thread was: #{ex.message} (#{ex.class})"
+			$stderr.puts ex.backtrace.map { |l| "  #{l}" }.join("\n")
+		end
+
+		exit 1
 	end
 end
 
