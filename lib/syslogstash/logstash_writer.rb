@@ -10,8 +10,8 @@ class Syslogstash::LogstashWriter
 	# Give it a list of servers, and your writer will be ready to go.
 	# No messages will actually be *delivered*, though, until you call #run.
 	#
-	def initialize(servers, backlog)
-		@servers, @backlog = servers.map { |s| URI(s) }, backlog
+	def initialize(servers, backlog, metrics)
+		@servers, @backlog, @metrics = servers.map { |s| URI(s) }, backlog, metrics
 
 		unless @servers.all? { |url| url.scheme == 'tcp' }
 			raise ArgumentError,
@@ -28,7 +28,7 @@ class Syslogstash::LogstashWriter
 	#
 	def send_entry(e)
 		@entries_mutex.synchronize do
-			@entries << e
+			@entries << { content: e, arrival_timestamp: Time.now }
 			@entries.shift while @entries.length > @backlog
 		end
 		@worker.run if @worker
@@ -53,8 +53,10 @@ class Syslogstash::LogstashWriter
 					entry = @entries_mutex.synchronize { @entries.shift }
 
 					current_server do |s|
-						s.puts entry
+						s.puts entry[:content]
 					end
+
+					@metrics.sent(@servers.last, entry[:arrival_timestamp])
 
 					# If we got here, we sent successfully, so we don't want
 					# to put the entry back on the queue in the ensure block
@@ -75,7 +77,7 @@ class Syslogstash::LogstashWriter
 	#
 	# The yielding is very deliberate: it allows us to centralise all
 	# error detection and handling within this one method, and retry
-	# sending just be calling `yield` again when we've connected to
+	# sending just by calling `yield` again when we've connected to
 	# another server.
 	#
 	def current_server

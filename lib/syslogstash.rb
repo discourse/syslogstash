@@ -8,22 +8,26 @@ require 'thwait'
 #
 class Syslogstash
 	def initialize(sockets, servers, backlog)
-		@writer = LogstashWriter.new(servers, backlog)
+		@metrics = PrometheusExporter.new
 
-		@readers = sockets.map { |f, tags| SyslogReader.new(f, tags, @writer) }
+		@writer = LogstashWriter.new(servers, backlog, @metrics)
+
+		@readers = sockets.map { |f, tags| SyslogReader.new(f, tags, @writer, @metrics) }
 	end
 
 	def run
+		@metrics.run
 		@writer.run
 		@readers.each { |w| w.run }
 
-		tw = ThreadsWait.new(@writer.thread, *(@readers.map { |r| r.thread }))
+		tw = ThreadsWait.new(@metrics.thread, @writer.thread, *(@readers.map { |r| r.thread }))
 
 		dead_thread = tw.next_wait
 
 		if dead_thread == @writer.thread
 			$stderr.puts "Writer thread crashed."
-			exit 1
+		elsif dead_thread == @metrics.thread
+			$stderr.puts "Metrics exporter thread crashed."
 		else
 			reader = @readers.find { |r| r.thread == dead_thread }
 
@@ -33,7 +37,7 @@ class Syslogstash
 		begin
 			dead_thread.join
 		rescue Exception => ex
-			$stderr.puts "Exception in worker thread was: #{ex.message} (#{ex.class})"
+			$stderr.puts "Exception in thread was: #{ex.message} (#{ex.class})"
 			$stderr.puts ex.backtrace.map { |l| "  #{l}" }.join("\n")
 		end
 
@@ -43,4 +47,4 @@ end
 
 require_relative 'syslogstash/syslog_reader'
 require_relative 'syslogstash/logstash_writer'
-
+require_relative 'syslogstash/prometheus_exporter'

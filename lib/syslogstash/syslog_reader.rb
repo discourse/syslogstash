@@ -7,8 +7,8 @@ class Syslogstash::SyslogReader
 
 	attr_reader :file
 
-	def initialize(file, tags, logstash)
-		@file, @tags, @logstash = file, tags, logstash
+	def initialize(file, tags, logstash, metrics)
+		@file, @tags, @logstash, @metrics = file, tags, logstash, metrics
 
 		log { "initializing syslog socket #{file} with tags #{tags.inspect}" }
 	end
@@ -37,6 +37,7 @@ class Syslogstash::SyslogReader
 				loop do
 					msg = socket.recvmsg
 					debug { "Message received: #{msg.inspect}" }
+					@metrics.received(@file, Time.now)
 					process_message msg.first.chomp
 				end
 			ensure
