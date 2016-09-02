@@ -59,10 +59,10 @@ class Syslogstash::SyslogReader
 			# Lo! the many ways that syslog messages can be formatted
 			hostname, program, pid, message = case content
 				# the gold standard: hostname, program name with optional PID
-				when /^([a-zA-Z0-9_-]*[^:]) (\S+?)(\[(\d+)\])?: (.*)$/
+				when /^([a-zA-Z0-9._-]*[^:]) (\S+?)(\[(\d+)\])?: (.*)$/
 					[$1, $2, $4, $5]
 				# hostname, no program name
-				when /^([a-zA-Z0-9_-]+) (\S+[^:] .*)$/
+				when /^([a-zA-Z0-9._-]+) (\S+[^:] .*)$/
 					[$1, nil, nil, $2]
 				# program name, no hostname (yeah, you heard me, non-RFC compliant!)
 				when /^(\S+?)(\[(\d+)\])?: (.*)$/
