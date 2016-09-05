@@ -25,19 +25,19 @@ class Syslogstash
 		dead_thread = tw.next_wait
 
 		if dead_thread == @writer.thread
-			$stderr.puts "Writer thread crashed."
+			$stderr.puts "[Syslogstash] Writer thread crashed."
 		elsif dead_thread == @metrics.thread
-			$stderr.puts "Metrics exporter thread crashed."
+			$stderr.puts "[Syslogstash] Metrics exporter thread crashed."
 		else
 			reader = @readers.find { |r| r.thread == dead_thread }
 
-			$stderr.puts "Reader thread for #{reader.file} crashed."
+			$stderr.puts "[Syslogstash] Reader thread for #{reader.file} crashed."
 		end
 
 		begin
 			dead_thread.join
 		rescue Exception => ex
-			$stderr.puts "Exception in thread was: #{ex.message} (#{ex.class})"
+			$stderr.puts "[Syslogstash] Exception in thread was: #{ex.message} (#{ex.class})"
 			$stderr.puts ex.backtrace.map { |l| "  #{l}" }.join("\n")
 		end
 

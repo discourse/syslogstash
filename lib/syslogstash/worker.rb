@@ -23,12 +23,12 @@ module Syslogstash::Worker
 	private
 
 	def log
-		$stderr.puts "#{Time.now.strftime("%F %T.%L")} #{self.class} #{yield.to_s}"
+		$stderr.puts "[#{self.class}] #{yield.to_s}"
 	end
 
 	def debug
 		if ENV['DEBUG_SYSLOGSTASH']
-			$stderr.puts "#{Time.now.strftime("%F %T.%L")} #{self.class} #{yield.to_s}"
+			$stderr.puts "[#{self.class}] #{yield.to_s}"
 		end
 	end
 end

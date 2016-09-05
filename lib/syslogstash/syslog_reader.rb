@@ -28,7 +28,7 @@ class Syslogstash::SyslogReader
 			File.unlink(@file) rescue nil
 			retry
 		rescue SystemCallError
-			$stderr.puts "Error while trying to bind to #{@file}"
+			log { "Error while trying to bind to #{@file}" }
 			raise
 		end
 
@@ -87,7 +87,7 @@ class Syslogstash::SyslogReader
 
 			@logstash.send_entry(log_entry)
 		else
-			$stderr.puts "Unparseable message: #{msg}"
+			log { "Unparseable message: #{msg}" }
 		end
 	end
 

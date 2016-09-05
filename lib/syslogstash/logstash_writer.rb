@@ -62,7 +62,7 @@ class Syslogstash::LogstashWriter
 					# to put the entry back on the queue in the ensure block
 					entry = nil
 				rescue StandardError => ex
-					$stderr.puts "Unhandled exception: #{ex.message} (#{ex.class})"
+					log { "Unhandled exception: #{ex.message} (#{ex.class})" }
 					$stderr.puts ex.backtrace.map { |l| "  #{l}" }.join("\n")
 				ensure
 					@entries_mutex.synchronize { @entries.unshift if entry }
