@@ -7,10 +7,24 @@ class Syslogstash::SyslogReader
 
 	attr_reader :file
 
-	def initialize(file, tags, logstash, metrics)
-		@file, @tags, @logstash, @metrics = file, tags, logstash, metrics
+	def initialize(file, config, logstash, metrics)
+		@file, @logstash, @metrics = file, logstash, metrics
+		config ||= {}
 
-		log { "initializing syslog socket #{file} with tags #{tags.inspect}" }
+		@add_fields = config['add_fields'] || {}
+		@relay_to   = config['relay_to']   || []
+
+		unless @add_fields.is_a? Hash
+			raise ArgumentError,
+			      "add_fields parameter to socket #{file} must be a hash"
+		end
+
+		unless @relay_to.is_a? Array
+			raise ArgumentError,
+			      "relay_to parameter to socket #{file} must be an array"
+		end
+
+		log { "initialized syslog socket #{file} with config #{config.inspect}" }
 	end
 
 	# Start reading from the socket file, parsing entries, and flinging
@@ -39,6 +53,7 @@ class Syslogstash::SyslogReader
 					debug { "Message received: #{msg.inspect}" }
 					@metrics.received(@file, Time.now)
 					process_message msg.first.chomp
+					relay_message msg.first
 				end
 			ensure
 				socket.close
@@ -100,10 +115,43 @@ class Syslogstash::SyslogReader
 			h[:severity_name] = SEVERITIES[h[:severity]]
 
 			e.merge!(h.delete_if { |k,v| v.nil? })
-
-			e.merge!(@tags) if @tags.is_a? Hash
+			e.merge!(@add_fields)
 
 			debug { "Log entry is: #{e.inspect}" }
+		end
+	end
+
+	def relay_message(msg)
+		@currently_failed ||= {}
+
+		@relay_to.each do |f|
+			s = Socket.new(Socket::AF_UNIX, Socket::SOCK_DGRAM, 0)
+			begin
+				s.connect(Socket.pack_sockaddr_un(f))
+			rescue Errno::ENOENT
+				# Socket doesn't exist; we don't care enough about this to bother
+				# reporting it.  People will figure it out themselves soon enough.
+			rescue StandardError => ex
+				log { "Error while connecting to relay socket #{f}: #{ex.message} (#{ex.class})" }
+				next
+			end
+
+			begin
+				s.sendmsg_nonblock(msg)
+				if @currently_failed[f]
+					log { "Backlog on socket #{f} has cleared; messages are being delivered again" }
+					@currently_failed[f] = false
+				end
+			rescue Errno::ENOTCONN
+				# Socket isn't being listened to.  Not our problem.
+			rescue IO::EAGAINWaitWritable
+				unless @currently_failed[f]
+					log { "Socket #{f} is backlogged; messages to this socket from socket #{@file} are being discarded undelivered" }
+					@currently_failed = true
+				end
+			rescue StandardError => ex
+				log { "Failed to relay message to socket #{f} from #{@file}: #{ex.message} (#{ex.class})" }
+			end
 		end
 	end
 

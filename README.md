@@ -31,20 +31,25 @@ The file which describes how `syslogstash` will operate is a fairly simple
 YAML file.  It consists of two sections, `sockets` and `servers`, which list
 the UNIX sockets to listen for syslog messages on, and the URLs of logstash
 servers to send the resulting log entries to.  Optionally, you can specify
-additional tags to insert into every message received from each syslog
+additional fields to insert into every message received from each syslog
 socket.
 
 It looks like this:
 
     sockets:
-      # These sockets have no additional tags
+      # These sockets have no additional fields
       /tmp/sock1:
       /tmp/sock2:
 
-      # This socket will have its messages tagged
-      /tmp/taggedsock:
-        foo: bar
-        baz: wombat
+      # This socket will have some fields added to its messages, and will
+      # send all messages to a couple of other sockets, too
+      /tmp/supersock:
+        add_fields:
+          foo: bar
+          baz: wombat
+        relay_to:
+          - /tmp/relaysock1
+          - /tmp/relaysock2
 
     # Every log entry received will be sent to *exactly* one of these
     # servers.  This provides high availability for your log messages.
@@ -52,6 +57,23 @@ It looks like this:
     servers:
       - tcp://10.0.0.1:5151
       - tcp://10.0.0.2:5151
+
+
+### Socket configuration
+
+Each socket has a configuration associated with it.  Using this
+configuration, you can add logstash fields to each entry, and configure
+socket relaying.
+
+The following keys are available under each socket's path:
+
+* `add_fields` -- A hash of additional fields to add to every log entry that
+  is received on this socket, before it is passed on to logstash.
+
+* `relay_to` -- A list of sockets to send all received messages to.  This is
+  useful in a very limited range of circumstances, when (for instance) you
+  have another syslog socket consumer that wants to get in on the act, like
+  a legacy syslogd.
 
 
 ## Logstash server configuration

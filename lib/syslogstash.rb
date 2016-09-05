@@ -12,7 +12,7 @@ class Syslogstash
 
 		@writer = LogstashWriter.new(servers, backlog, @metrics)
 
-		@readers = sockets.map { |f, tags| SyslogReader.new(f, tags, @writer, @metrics) }
+		@readers = sockets.map { |f, cfg| SyslogReader.new(f, cfg, @writer, @metrics) }
 	end
 
 	def run
