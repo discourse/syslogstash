@@ -1,6 +1,7 @@
 require 'prometheus/client/rack/exporter'
 require 'rack'
-require 'rack/handler/puma'
+require 'rack/handler/webrick'
+require 'logger'
 
 class Syslogstash::PrometheusExporter
 	attr_reader :thread
@@ -40,7 +41,11 @@ class Syslogstash::PrometheusExporter
 			app.use Prometheus::Client::Rack::Exporter
 			app.run ->(env) { [404, {'Content-Type' => 'text/plain'}, ['Nope']] }
 
-			Rack::Handler::Puma.run app, Host: '[::]', Port: 9159
+			logger = Logger.new($stderr)
+			logger.level = Logger::INFO
+			logger.formatter = proc { |s, t, p, m| "[Syslogstash::PrometheusExporter::WEBrick] #{m}\n" }
+
+			Rack::Handler::WEBrick.run app, BindAddress: '::', Port: 9159, Logger: logger, AccessLog: []
 		end
 	end
 

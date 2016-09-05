@@ -24,7 +24,6 @@ Gem::Specification.new do |s|
 	s.required_ruby_version = ">= 2.1.0"
 
 	s.add_runtime_dependency 'prometheus-client'
-	s.add_runtime_dependency 'puma'
 	s.add_runtime_dependency 'rack'
 
 	s.add_development_dependency 'bundler'
