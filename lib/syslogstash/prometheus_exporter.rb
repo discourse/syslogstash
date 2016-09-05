@@ -45,7 +45,7 @@ class Syslogstash::PrometheusExporter
 			logger.level = Logger::INFO
 			logger.formatter = proc { |s, t, p, m| "[Syslogstash::PrometheusExporter::WEBrick] #{m}\n" }
 
-			Rack::Handler::WEBrick.run app, BindAddress: '::', Port: 9159, Logger: logger, AccessLog: []
+			Rack::Handler::WEBrick.run app, Host: '::', Port: 9159, Logger: logger, AccessLog: []
 		end
 	end
 
