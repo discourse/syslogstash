@@ -147,7 +147,7 @@ class Syslogstash::SyslogReader
 			rescue IO::EAGAINWaitWritable
 				unless @currently_failed[f]
 					log { "Socket #{f} is backlogged; messages to this socket from socket #{@file} are being discarded undelivered" }
-					@currently_failed = true
+					@currently_failed[f] = true
 				end
 			rescue StandardError => ex
 				log { "Failed to relay message to socket #{f} from #{@file}: #{ex.message} (#{ex.class})" }
