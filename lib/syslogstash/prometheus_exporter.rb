@@ -38,7 +38,7 @@ class Syslogstash::PrometheusExporter
 
 	def dropped
 		@queue.set({}, @queue.get({}) - 1)
-		@dropped.increment(logstash_server: server)
+		@dropped.increment({})
 	end
 
 	def run
