@@ -29,7 +29,10 @@ class Syslogstash::LogstashWriter
 	def send_entry(e)
 		@entries_mutex.synchronize do
 			@entries << { content: e, arrival_timestamp: Time.now }
-			@entries.shift while @entries.length > @backlog
+			while @entries.length > @backlog
+				@entries.shift
+				@metrics.dropped
+			end
 		end
 		@worker.run if @worker
 	end

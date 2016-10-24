@@ -11,6 +11,7 @@ class Syslogstash::PrometheusExporter
 		@msg_out = prom.counter(:syslogstash_messages_sent, "The number of logstash messages sent to each logstash server")
 		@lag     = prom.gauge(:syslogstash_lag_ms, "How far behind we are in relaying messages")
 		@queue   = prom.gauge(:syslogstash_queue_size, "How many messages are queued to be sent")
+		@dropped = prom.counter(:syslogstash_messages_dropped, "How many syslog messages have been dropped from the backlog queue")
 	end
 
 	def received(socket, stamp)
@@ -33,6 +34,11 @@ class Syslogstash::PrometheusExporter
 
 			refresh_lag
 		end
+	end
+
+	def dropped
+		@queue.set({}, @queue.get({}) - 1)
+		@dropped.increment(logstash_server: server)
 	end
 
 	def run
