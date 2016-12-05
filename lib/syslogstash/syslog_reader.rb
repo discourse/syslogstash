@@ -37,6 +37,7 @@ class Syslogstash::SyslogReader
 		begin
 			socket = Socket.new(Socket::AF_UNIX, Socket::SOCK_DGRAM, 0)
 			socket.bind(Socket.pack_sockaddr_un(@file))
+			File.chmod(0666, @file)
 		rescue Errno::EEXIST, Errno::EADDRINUSE
 			log { "socket file #{@file} already exists; deleting" }
 			File.unlink(@file) rescue nil
