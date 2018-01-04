@@ -1,5 +1,5 @@
-require 'prometheus/client/rack/exporter'
 require 'rack'
+require 'prometheus/middleware/exporter'
 require 'rack/handler/webrick'
 require 'logger'
 
@@ -44,7 +44,7 @@ class Syslogstash::PrometheusExporter
 	def run
 		@thread = Thread.new do
 			app = Rack::Builder.new
-			app.use Prometheus::Client::Rack::Exporter
+			app.use Prometheus::Middleware::Exporter
 			app.run ->(env) { [404, {'Content-Type' => 'text/plain'}, ['Nope']] }
 
 			logger = Logger.new($stderr)
