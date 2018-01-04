@@ -108,7 +108,7 @@ class Syslogstash::LogstashWriter
 					next_server = @servers.shift
 					debug { "Trying to connect to #{next_server.to_s}" }
 					@servers.push(next_server)
-					@current_server = TCPSocket.new(next_server.host, next_server.port)
+					@current_server = TCPSocket.new(next_server.hostname, next_server.port)
 				rescue SystemCallError => ex
 					# Connection failed for any number of reasons; try again
 					debug { "Failed to connect to #{next_server.to_s}: #{ex.message} (#{ex.class})" }
