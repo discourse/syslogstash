@@ -104,10 +104,9 @@ class Syslogstash::LogstashWriter
 				end
 			else
 				begin
-					# Rotate the next server onto the back of the list
-					next_server = @servers.shift
+					# Pick another server to connect to at random
+					next_server = @servers.sort { rand }.first
 					debug { "Trying to connect to #{next_server.to_s}" }
-					@servers.push(next_server)
 					@current_server = TCPSocket.new(next_server.hostname, next_server.port)
 				rescue SystemCallError => ex
 					# Connection failed for any number of reasons; try again
