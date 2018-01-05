@@ -11,12 +11,13 @@ class Syslogstash::PrometheusExporter
 		@msg_out = prom.counter(:syslogstash_messages_sent, "The number of logstash messages sent to each logstash server")
 		@lag     = prom.gauge(:syslogstash_lag_ms, "How far behind we are in relaying messages")
 		@queue   = prom.gauge(:syslogstash_queue_size, "How many messages are queued to be sent")
+		@q_mutex = Mutex.new
 		@dropped = prom.counter(:syslogstash_messages_dropped, "How many syslog messages have been dropped from the backlog queue")
 	end
 
 	def received(socket, stamp)
 		@msg_in.increment(socket_path: socket)
-		@queue.set({}, (@queue.get({}) || 0) + 1)
+		@q_mutex.synchronize { @queue.set({}, (@queue.get({}) || 0) + 1) }
 
 		if @most_recent_received.nil? || @most_recent_received < stamp
 			@most_recent_received = stamp
@@ -27,7 +28,7 @@ class Syslogstash::PrometheusExporter
 
 	def sent(server, stamp)
 		@msg_out.increment(logstash_server: server)
-		@queue.set({}, @queue.get({}) - 1)
+		@q_mutex.synchronize { @queue.set({}, @queue.get({}) - 1) }
 
 		if @most_recent_sent.nil? || @most_recent_sent < stamp
 			@most_recent_sent = stamp
