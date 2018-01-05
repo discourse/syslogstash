@@ -1,7 +1,5 @@
 exec(*(["bundle", "exec", $PROGRAM_NAME] + ARGV)) if ENV['BUNDLE_GEMFILE'].nil?
 
-Bundler.setup(:default, :development)
-
 task :default => :test
 
 begin
