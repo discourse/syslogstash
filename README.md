@@ -17,6 +17,13 @@ If you're the sturdy type that likes to run from git:
 Or, if you've eschewed the convenience of Rubygems entirely, then you
 presumably know what to do already.
 
+## Docker
+
+Published image at https://hub.docker.com/r/discourse/syslogstash/
+
+Running `make` will build and push. The tag will be generated from the date and time.
+If you need to specify one, run `make TAG=value`
+
 
 # Usage
 
