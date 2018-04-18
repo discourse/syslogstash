@@ -112,6 +112,7 @@ class Syslogstash::SyslogReader
 		if @cfg.relay_to_stdout
 			# This one's easy
 			puts msg.sub(/\A<\d+>/, '')
+			$stdout.flush
 		end
 
 		@relay_to.each do |f|
