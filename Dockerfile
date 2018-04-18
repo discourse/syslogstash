@@ -1,12 +1,13 @@
-# Run syslogstash
-
 FROM ruby:2.3-alpine
-MAINTAINER Matt Palmer "matt.palmer@discourse.org"
+
+ARG GEM_VERSION="> 0"
+
+COPY pkg/syslogstash-$GEM_VERSION.gem /tmp/syslogstash.gem
 
 RUN apk update \
 	&& apk add build-base \
-	&& gem install syslogstash -v 1.3.0 \
+	&& gem install /tmp/syslogstash.gem \
 	&& apk del build-base \
-	&& rm -f /var/cache/apk/*
+	&& rm -f /var/cache/apk/* /tmp/syslogstash.gem
 
 ENTRYPOINT ["/usr/local/bundle/bin/syslogstash"]

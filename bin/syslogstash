@@ -1,51 +1,56 @@
 #!/usr/bin/env ruby
 
 require 'syslogstash'
-require 'yaml'
+require 'logger'
 
-if ARGV.length != 1
-	$stderr.puts <<-EOF.gsub(/^\t\t/, '')
-		Invalid usage
+logger = Logger.new($stderr)
+logger.formatter = ->(s, t, p, m) { "#{s[0]} [#{p}] #{m}\n" }
+logger.level = Logger::INFO
 
-		Usage:
-		  #{$0} <configfile>
-	EOF
-
-	exit 1
+begin
+  cfg = Syslogstash::Config.new(ENV, logger: logger)
+rescue Syslogstash::Config::ConfigurationError => ex
+  $stderr.puts "Error in configuration: #{ex.message}"
+  exit 1
 end
 
-unless File.exist?(ARGV[0])
-	$stderr.puts "Config file #{ARGV[0]} does not exist"
-	exit 1
+syslogstash = Syslogstash.new(cfg)
+
+sig_r, sig_w = IO.pipe
+
+Signal.trap("USR1") do
+	sig_w.print '1'
+end
+Signal.trap("USR2") do
+	sig_w.print '2'
+end
+Signal.trap("URG") do
+	sig_w.print 'U'
 end
 
-unless File.readable?(ARGV[0])
-	$stderr.puts "Config file #{ARGV[0]} not readable"
-	exit 1
+Thread.new do
+  loop do
+    begin
+      c = sig_r.getc
+      if c == '1'
+        logger.level -= 1 unless logger.level == Logger::DEBUG
+        logger.info("SignalHandler") { "Received SIGUSR1; log level is now #{Logger::SEV_LABEL[logger.level]}." }
+      elsif c == '2'
+        logger.level += 1 unless logger.level == Logger::ERROR
+        logger.info("SignalHandler") { "Received SIGUSR2; log level is now #{Logger::SEV_LABEL[logger.level]}." }
+      elsif c == 'U'
+        cfg.relay_to_stdout = !cfg.relay_to_stdout
+        logger.info("SignalHandler") { "Received SIGURG; Relaying to stdout is now #{cfg.relay_to_stdout ? "enabled" : "disabled"}" }
+      else
+        logger.error("SignalHandler") { "Got an unrecognised character from signal pipe: #{c.inspect}" }
+      end
+    rescue StandardError => ex
+      logger.error("SignalHandler") { (["Exception raised: #{ex.message} (#{ex.class})"] + ex.backtrace).join("\n  ") }
+    rescue Exception => ex
+      $stderr.puts (["Fatal exception in syslogstash signal handler: #{ex.message} (#{ex.class})"] + ex.backtrace).join("\n  ")
+      exit 42
+    end
+  end
 end
 
-cfg = YAML.load_file(ARGV[0])
-
-unless cfg.is_a? Hash
-	$stderr.puts "Config file #{ARGV[0]} does not contain a YAML hash"
-	exit 1
-end
-
-%w{sockets servers}.each do |section|
-	unless cfg.has_key?(section)
-		$stderr.puts "Config file #{ARGV[0]} does not have a '#{section}' section"
-		exit 1
-	end
-
-	unless cfg[section].respond_to?(:empty?)
-		$stderr.puts "Config file #{ARGV[0]} has a malformed '#{section}' section"
-		exit 1
-	end
-
-	if cfg[section].empty?
-		$stderr.puts "Config file #{ARGV[0]} has an empty '#{section}' section"
-		exit 1
-	end
-end
-
-Syslogstash.new(cfg['sockets'], cfg['servers'], cfg.fetch('backlog', 1_000_000)).run
+syslogstash.run

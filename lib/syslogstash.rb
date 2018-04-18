@@ -7,44 +7,45 @@ require 'thwait'
 # server.
 #
 class Syslogstash
-	def initialize(sockets, servers, backlog)
-		@metrics = PrometheusExporter.new
-
-		@writer = LogstashWriter.new(servers, backlog, @metrics)
-
-		@readers = sockets.map { |f, cfg| SyslogReader.new(f, cfg, @writer, @metrics) }
+	def initialize(cfg)
+		@cfg    = cfg
+		@stats  = PrometheusExporter.new(cfg)
+		@writer = LogstashWriter.new(cfg, @stats)
+		@reader = SyslogReader.new(cfg, @writer, @stats)
+		@logger = cfg.logger
 	end
 
 	def run
-		@metrics.run
+		if @cfg.stats_server
+			@logger.debug("main") { "Running stats server" }
+			@stats.run
+		end
+
 		@writer.run
-		@readers.each { |w| w.run }
+		@reader.run
 
-		tw = ThreadsWait.new(@metrics.thread, @writer.thread, *(@readers.map { |r| r.thread }))
-
-		dead_thread = tw.next_wait
+		dead_thread = ThreadsWait.new(@reader.thread, @writer.thread).next_wait
 
 		if dead_thread == @writer.thread
-			$stderr.puts "[Syslogstash] Writer thread crashed."
-		elsif dead_thread == @metrics.thread
-			$stderr.puts "[Syslogstash] Metrics exporter thread crashed."
+			@logger.error("main") { "Writer thread crashed." }
+		elsif dead_thread == @reader.thread
+			@logger.error("main") { "Reader thread crashed." }
 		else
-			reader = @readers.find { |r| r.thread == dead_thread }
-
-			$stderr.puts "[Syslogstash] Reader thread for #{reader.file} crashed."
+			@logger.fatal("main") { "ThreadsWait#next_wait returned unexpected value #{dead_thread.inspect}" }
+			exit 1
 		end
 
 		begin
 			dead_thread.join
 		rescue Exception => ex
-			$stderr.puts "[Syslogstash] Exception in thread was: #{ex.message} (#{ex.class})"
-			$stderr.puts ex.backtrace.map { |l| "  #{l}" }.join("\n")
+			@logger.error("main") { (["Exception in crashed thread was: #{ex.message} (#{ex.class})"] + ex.backtrace).join("\n  ") }
 		end
 
 		exit 1
 	end
 end
 
+require_relative 'syslogstash/config'
 require_relative 'syslogstash/syslog_reader'
 require_relative 'syslogstash/logstash_writer'
 require_relative 'syslogstash/prometheus_exporter'

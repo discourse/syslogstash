@@ -16,18 +16,19 @@ task :release do
 	sh "git release"
 end
 
-require 'yard'
+desc "Build and push a new docker image"
+task :docker => ["docker:push"]
 
-YARD::Rake::YardocTask.new :doc do |yardoc|
-	yardoc.files = %w{lib/**/*.rb - README.md}
-end
+namespace :docker do
+	desc "Build a new docker image"
+	task :build => "^build" do
+		sh "for repo in $(sed -n 's/^FROM //p' Dockerfile); do docker pull \"$repo\"; done"
+		sh "docker build -t discourse/syslogstash:#{GVB.version} --build-arg=GEM_VERSION=#{GVB.version} --build-arg=http_proxy=#{ENV['http_proxy']} ."
+	end
 
-desc "Run guard"
-task :guard do
-	sh "guard --clear"
-end
-
-require 'rspec/core/rake_task'
-RSpec::Core::RakeTask.new :test do |t|
-	t.pattern = "spec/**/*_spec.rb"
+	task :push => :build do
+		sh "docker tag discourse/syslogstash:#{GVB.version} discourse/syslogstash:latest"
+		sh "docker push discourse/syslogstash:#{GVB.version}"
+		sh "docker push discourse/syslogstash:latest"
+	end
 end
