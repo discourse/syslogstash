@@ -192,7 +192,7 @@ below.
     than strings, are not supported.  Also, if you specify a field name also
     used by syslogstash, the results are explicitly undefined.
 
-* **`RELAY_SOCKET`** (optional; default `""`) -- on the off-chance you want
+* **`RELAY_SOCKETS`** (optional; default `""`) -- on the off-chance you want
   to feed the syslog messages that syslogstash receives to another
   syslog-compatible consumer (say, an old-school syslogd) you can specify
   additional filenames to use here.  Multiple socket filenames can be
