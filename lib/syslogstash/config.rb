@@ -39,6 +39,8 @@ class Syslogstash::Config
 	private
 
 	def parse_env(env)
+		@logger.info("config") { "Parsing environment:\n" + env.map { |k, v| "#{k}=#{v.inspect}" }.join("\n") }
+
 		@logstash_server = pluck_string(env, "LOGSTASH_SERVER")
 		@syslog_socket   = pluck_string(env, "SYSLOG_SOCKET")
 		@relay_to_stdout = pluck_boolean(env, "RELAY_TO_STDOUT", default: false)
@@ -89,6 +91,8 @@ class Syslogstash::Config
 				key = k.sub(prefix, '')
 				list[key] = v
 			end
+
+			@logger.debug("config") { "Prefix list for #{prefix.inspect} is #{list.inspect}" }
 		end
 	end
 
@@ -104,10 +108,11 @@ class Syslogstash::Config
 				raise ConfigurationError,
 				      "Required environment variable #{key} not specified"
 			else
+				@logger.debug("config") { "Using default value #{default.inspect} for config parameter #{key}" }
 				default
 			end
 		else
-			yield
+			yield.tap { |v| @logger.debug("config") { "Using plucked value #{v.inspect} for config parameter #{key}" } }
 		end
 	end
 end
