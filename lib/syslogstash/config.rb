@@ -46,7 +46,7 @@ class Syslogstash::Config
 		@relay_to_stdout = pluck_boolean(env, "RELAY_TO_STDOUT", default: false)
 		@stats_server    = pluck_boolean(env, "STATS_SERVER", default: false)
 		@backlog_size    = pluck_integer(env, "BACKLOG_SIZE", valid_range: 0..(2**31 - 1), default: 1_000_000)
-		@add_fields      = pluck_prefix_list(env, "ADD_FIELDS_")
+		@add_fields      = pluck_prefix_list(env, "ADD_FIELD_")
 		@relay_sockets   = pluck_path_list(env, "RELAY_SOCKETS", default: [])
 	end
 
