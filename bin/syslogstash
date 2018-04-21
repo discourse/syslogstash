@@ -5,7 +5,7 @@ require 'logger'
 
 logger = Logger.new($stderr)
 logger.formatter = ->(s, t, p, m) { "#{s[0]} [#{p}] #{m}\n" }
-logger.level = Logger::INFO
+logger.level = Logger.const_get(ENV['SYSLOGSTASH_LOG_LEVEL'] || "INFO")
 
 begin
   cfg = Syslogstash::Config.new(ENV, logger: logger)
