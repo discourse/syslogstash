@@ -114,6 +114,7 @@ class Syslogstash::LogstashWriter
 					end
 				else
 					candidates = resolve_server_name
+					@logger.debug("writer") { "Server candidates: #{candidates.inspect}" }
 
 					begin
 						next_server = candidates.shift
