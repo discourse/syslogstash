@@ -159,7 +159,7 @@ class Syslogstash::LogstashWriter
 			if addrs.empty?
 				@logger.warn("writer") { "No addresses resolved for server_name #{host.inspect}" }
 			end
-			addrs.map { |a| Target.new(a.to_s, port.to_i) }
+			addrs.sort_by { rand }.map { |a| Target.new(a.to_s, port.to_i) }
 		else
 			# SRV records ftw
 			[].tap do |list|
