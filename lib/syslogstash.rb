@@ -43,6 +43,10 @@ class Syslogstash
 
 		exit 1
 	end
+
+	def force_disconnect!
+		@writer.force_disconnect!
+	end
 end
 
 require_relative 'syslogstash/config'

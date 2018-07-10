@@ -19,13 +19,16 @@ syslogstash = Syslogstash.new(cfg)
 sig_r, sig_w = IO.pipe
 
 Signal.trap("USR1") do
-	sig_w.print '1'
+  sig_w.print '1'
 end
 Signal.trap("USR2") do
-	sig_w.print '2'
+  sig_w.print '2'
 end
 Signal.trap("URG") do
-	sig_w.print 'U'
+  sig_w.print 'U'
+end
+Signal.trap("HUP") do
+  sig_w.print 'H'
 end
 
 Thread.new do
@@ -41,6 +44,9 @@ Thread.new do
       elsif c == 'U'
         cfg.relay_to_stdout = !cfg.relay_to_stdout
         logger.info("SignalHandler") { "Received SIGURG; Relaying to stdout is now #{cfg.relay_to_stdout ? "enabled" : "disabled"}" }
+      elsif c== 'H'
+        logger.info("SignalHandler") { "Received SIGHUP" }
+        syslogstash.force_disconnect!
       else
         logger.error("SignalHandler") { "Got an unrecognised character from signal pipe: #{c.inspect}" }
       end

@@ -19,6 +19,7 @@ class Syslogstash::LogstashWriter
 
 		@entries = []
 		@entries_mutex = Mutex.new
+		@cs_mutex = Mutex.new
 	end
 
 	# Add an entry to the list of messages to be sent to logstash.  Actual
@@ -43,6 +44,16 @@ class Syslogstash::LogstashWriter
 	#
 	def run
 		@thread = Thread.new { send_messages }
+	end
+
+	# Cause the writer to disconnect from the currently-active server.
+	#
+	def force_disconnect!
+		@cs_mutex.synchronize do
+			@logger.info("writer") { "Forced disconnect from #{server_id(@current_server) }" }
+			@current_server.close if @current_server
+			@current_server = nil
+		end
 	end
 
 	private
@@ -87,38 +98,40 @@ class Syslogstash::LogstashWriter
 		done = false
 
 		until done
-			if @current_server
-				begin
-					@logger.debug("writer") { "Using current server #{server_id(@current_server)}" }
-					yield @current_server
-					done = true
-				rescue SystemCallError => ex
-					# Something went wrong during the send; disconnect from this
-					# server and recycle
-					@logger.debug("writer") { "Error while writing to current server: #{ex.message} (#{ex.class})" }
-					@current_server.close
-					@current_server = nil
-					sleep 0.1
-				end
-			else
-				candidates = resolve_server_name
-
-				begin
-					next_server = candidates.shift
-
-					if next_server
-						@logger.debug("writer") { "Trying to connect to #{next_server.to_s}" }
-						@current_server = TCPSocket.new(next_server.hostname, next_server.port)
-					else
-						@logger.debug("writer") { "Could not connect to any server; pausing before trying again" }
+			@cs_mutex.synchronize do
+				if @current_server
+					begin
+						@logger.debug("writer") { "Using current server #{server_id(@current_server)}" }
+						yield @current_server
+						done = true
+					rescue SystemCallError => ex
+						# Something went wrong during the send; disconnect from this
+						# server and recycle
+						@logger.debug("writer") { "Error while writing to current server: #{ex.message} (#{ex.class})" }
+						@current_server.close
 						@current_server = nil
-						sleep 5
+						sleep 0.1
 					end
-				rescue SystemCallError => ex
-					# Connection failed for any number of reasons; try the next one in the list
-					@logger.warn("writer") { "Failed to connect to #{next_server.to_s}: #{ex.message} (#{ex.class})" }
-					sleep 0.1
-					retry
+				else
+					candidates = resolve_server_name
+
+					begin
+						next_server = candidates.shift
+
+						if next_server
+							@logger.debug("writer") { "Trying to connect to #{next_server.to_s}" }
+							@current_server = TCPSocket.new(next_server.hostname, next_server.port)
+						else
+							@logger.debug("writer") { "Could not connect to any server; pausing before trying again" }
+							@current_server = nil
+							sleep 5
+						end
+					rescue SystemCallError => ex
+						# Connection failed for any number of reasons; try the next one in the list
+						@logger.warn("writer") { "Failed to connect to #{next_server.to_s}: #{ex.message} (#{ex.class})" }
+						sleep 0.1
+						retry
+					end
 				end
 			end
 		end

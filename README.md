@@ -85,6 +85,13 @@ aspects of runtime operation.  They are:
 * **`SIGURG`** -- toggle whether or not relaying to stdout is enabled or
   disabled.
 
+* **`SIGHUP`** -- pretend that the currently in-use logstash server has
+  failed, and trigger the random-server-selection logic to (potentially)
+  pick a new server.  Useful if you want to make sure that syslogstash
+  won't drop *any* messages when retiring a logstash server -- just remove
+  the logstash server from DNS, then SIGHUP syslogstash to make it switch
+  to another server.
+
 
 ## Use with Docker
 
