@@ -11,7 +11,8 @@ class Syslogstash::Config
 	            :backlog_size,
 	            :stats_server,
 	            :add_fields,
-	            :relay_sockets
+	            :relay_sockets,
+              :drop_regex
 
 	attr_reader :logger
 
@@ -48,6 +49,11 @@ class Syslogstash::Config
 		@backlog_size    = pluck_integer(env, "BACKLOG_SIZE", valid_range: 0..(2**31 - 1), default: 1_000_000)
 		@add_fields      = pluck_prefix_list(env, "ADD_FIELD_")
 		@relay_sockets   = pluck_path_list(env, "RELAY_SOCKETS", default: [])
+
+    regex = env["DROP_REGEX"]
+    if regex && !regex.empty?
+      @drop_regex = Regexp.new(regex)
+    end
 	end
 
 	def pluck_string(env, key, default: nil)

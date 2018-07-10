@@ -10,6 +10,7 @@ class Syslogstash::SyslogReader
 		@relay_to   = cfg.relay_sockets
 		@cfg        = cfg
 		@logger     = cfg.logger
+    @drop_regex = cfg.drop_regex
 	end
 
 	# Start reading from the socket file, parsing entries, and flinging
@@ -71,6 +72,11 @@ class Syslogstash::SyslogReader
 					# I have NFI
 					[nil, nil, nil, content]
 			end
+
+      if @drop_regex && message && message.match?(@drop_regex)
+        @logger.debug("reader") { "dropping message #{message}" }
+        return
+      end
 
 			severity = flags % 8
 			facility = flags / 8

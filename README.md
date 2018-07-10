@@ -208,6 +208,9 @@ below.
   message to the socket.  If the socket does not exist, or the open or write
   operations fail, syslogstash **will not** retry.
 
+* **`DROP_REGEX`** (optional) -- Regular expression to run on input, if it
+  matches then the message will be dropped and not passed on
+
 
 # Contributing
 
