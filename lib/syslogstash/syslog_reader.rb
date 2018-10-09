@@ -122,41 +122,45 @@ class Syslogstash::SyslogReader
 		end
 
 		@relay_to.each do |f|
-			s = Socket.new(Socket::AF_UNIX, Socket::SOCK_DGRAM, 0)
 			begin
-				s.connect(Socket.pack_sockaddr_un(f))
-			rescue Errno::ENOENT
-				# Socket doesn't exist; we don't care enough about this to bother
-				# reporting it.  People will figure it out themselves soon enough.
-			rescue StandardError => ex
-				unless @currently_failed[f]
-					@logger.warn("reader") { "Error while connecting to relay socket #{f}: #{ex.message} (#{ex.class})" }
-					@currently_failed[f] = true
+				s = Socket.new(Socket::AF_UNIX, Socket::SOCK_DGRAM, 0)
+				begin
+					s.connect(Socket.pack_sockaddr_un(f))
+				rescue Errno::ENOENT
+					# Socket doesn't exist; we don't care enough about this to bother
+					# reporting it.  People will figure it out themselves soon enough.
+				rescue StandardError => ex
+					unless @currently_failed[f]
+						@logger.warn("reader") { "Error while connecting to relay socket #{f}: #{ex.message} (#{ex.class})" }
+						@currently_failed[f] = true
+					end
+					next
 				end
-				next
-			end
 
-			begin
-				# We really, *really* don't want to block the world just because
-				# whoever's on the other end of the relay socket can't process
-				# messages quick enough.
-				s.sendmsg_nonblock(msg)
-				if @currently_failed[f]
-					@logger.info("reader") { "Error on socket #{f} has cleared; messages are being delivered again" }
-					@currently_failed[f] = false
+				begin
+					# We really, *really* don't want to block the world just because
+					# whoever's on the other end of the relay socket can't process
+					# messages quick enough.
+					s.sendmsg_nonblock(msg)
+					if @currently_failed[f]
+						@logger.info("reader") { "Error on socket #{f} has cleared; messages are being delivered again" }
+						@currently_failed[f] = false
+					end
+				rescue Errno::ENOTCONN
+					unless @currently_failed[f]
+						@logger.debug("reader") { "Nothing is listening on socket #{f}" }
+						@currently_failed[f] = true
+					end
+				rescue IO::EAGAINWaitWritable
+					unless @currently_failed[f]
+						@logger.warn("reader") { "Socket #{f} is currently backlogged; messages to this socket are now being discarded undelivered" }
+						@currently_failed[f] = true
+					end
+				rescue StandardError => ex
+					@logger.warn("reader") { (["Failed to relay message to socket #{f} from #{@file}: #{ex.message} (#{ex.class})"] + ex.backtrace).join("\n  ") }
 				end
-			rescue Errno::ENOTCONN
-				unless @currently_failed[f]
-					@logger.debug("reader") { "Nothing is listening on socket #{f}" }
-					@currently_failed[f] = true
-				end
-			rescue IO::EAGAINWaitWritable
-				unless @currently_failed[f]
-					@logger.warn("reader") { "Socket #{f} is currently backlogged; messages to this socket are now being discarded undelivered" }
-					@currently_failed[f] = true
-				end
-			rescue StandardError => ex
-				@logger.warn("reader") { (["Failed to relay message to socket #{f} from #{@file}: #{ex.message} (#{ex.class})"] + ex.backtrace).join("\n  ") }
+			ensure
+				s.close
 			end
 		end
 	end
