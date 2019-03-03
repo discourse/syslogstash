@@ -10,6 +10,22 @@ rescue Bundler::BundlerError => e
   exit e.status_code
 end
 
+require 'yard'
+
+YARD::Rake::YardocTask.new :doc do |yardoc|
+  yardoc.files = %w{lib/**/*.rb - README.md}
+end
+
+desc "Run guard"
+task :guard do
+  sh "guard --clear"
+end
+
+require 'rspec/core/rake_task'
+RSpec::Core::RakeTask.new :test do |t|
+  t.pattern = "spec/**/*_spec.rb"
+end
+
 Bundler::GemHelper.install_tasks
 
 task :release do
