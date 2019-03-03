@@ -21,7 +21,7 @@ Gem::Specification.new do |s|
   s.files = `git ls-files -z`.split("\0").reject { |f| f =~ /^(G|spec|Rakefile)/ }
   s.executables = ["syslogstash"]
 
-  s.required_ruby_version = ">= 2.1.0"
+  s.required_ruby_version = ">= 2.4.0"
 
   s.add_runtime_dependency 'frankenstein'
   s.add_runtime_dependency 'rack'
