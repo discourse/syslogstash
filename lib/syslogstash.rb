@@ -7,46 +7,46 @@ require 'thwait'
 # server.
 #
 class Syslogstash
-	def initialize(cfg)
-		@cfg    = cfg
-		@stats  = PrometheusExporter.new(cfg)
-		@writer = LogstashWriter.new(cfg, @stats)
-		@reader = SyslogReader.new(cfg, @writer, @stats)
-		@logger = cfg.logger
-	end
+  def initialize(cfg)
+    @cfg    = cfg
+    @stats  = PrometheusExporter.new(cfg)
+    @writer = LogstashWriter.new(cfg, @stats)
+    @reader = SyslogReader.new(cfg, @writer, @stats)
+    @logger = cfg.logger
+  end
 
-	def run
-		if @cfg.stats_server
-			@logger.debug("main") { "Running stats server" }
-			@stats.run
-		end
+  def run
+    if @cfg.stats_server
+      @logger.debug("main") { "Running stats server" }
+      @stats.run
+    end
 
-		@writer.run
-		@reader.run
+    @writer.run
+    @reader.run
 
-		dead_thread = ThreadsWait.new(@reader.thread, @writer.thread).next_wait
+    dead_thread = ThreadsWait.new(@reader.thread, @writer.thread).next_wait
 
-		if dead_thread == @writer.thread
-			@logger.error("main") { "Writer thread crashed." }
-		elsif dead_thread == @reader.thread
-			@logger.error("main") { "Reader thread crashed." }
-		else
-			@logger.fatal("main") { "ThreadsWait#next_wait returned unexpected value #{dead_thread.inspect}" }
-			exit 1
-		end
+    if dead_thread == @writer.thread
+      @logger.error("main") { "Writer thread crashed." }
+    elsif dead_thread == @reader.thread
+      @logger.error("main") { "Reader thread crashed." }
+    else
+      @logger.fatal("main") { "ThreadsWait#next_wait returned unexpected value #{dead_thread.inspect}" }
+      exit 1
+    end
 
-		begin
-			dead_thread.join
-		rescue Exception => ex
-			@logger.error("main") { (["Exception in crashed thread was: #{ex.message} (#{ex.class})"] + ex.backtrace).join("\n  ") }
-		end
+    begin
+      dead_thread.join
+    rescue Exception => ex
+      @logger.error("main") { (["Exception in crashed thread was: #{ex.message} (#{ex.class})"] + ex.backtrace).join("\n  ") }
+    end
 
-		exit 1
-	end
+    exit 1
+  end
 
-	def force_disconnect!
-		@writer.force_disconnect!
-	end
+  def force_disconnect!
+    @writer.force_disconnect!
+  end
 end
 
 require_relative 'syslogstash/config'
