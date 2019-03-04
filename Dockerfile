@@ -1,13 +1,10 @@
-FROM ruby:2.5.1-alpine
+FROM ruby:2.6
 
 ARG GEM_VERSION="> 0"
 
 COPY pkg/syslogstash-$GEM_VERSION.gem /tmp/syslogstash.gem
 
-RUN apk update \
-	&& apk add build-base \
-	&& gem install /tmp/syslogstash.gem \
-	&& apk del build-base \
-	&& rm -f /var/cache/apk/* /tmp/syslogstash.gem
+RUN gem install /tmp/syslogstash.gem \
+	&& rm -f /tmp/syslogstash.gem
 
 ENTRYPOINT ["/usr/local/bundle/bin/syslogstash"]

@@ -35,16 +35,23 @@ end
 desc "Build and push a new docker image"
 task :docker => ["docker:push"]
 
+docker_repo = ENV["DOCKER_REPO"] || "discourse/syslogstash"
+docker_tag  = ENV["DOCKER_TAG"]  || GVB.version
+
 namespace :docker do
   desc "Build a new docker image"
   task :build => "^build" do
-    sh "for repo in $(sed -n 's/^FROM //p' Dockerfile); do docker pull \"$repo\"; done"
-    sh "docker build -t discourse/syslogstash:#{GVB.version} --build-arg=GEM_VERSION=#{GVB.version} --build-arg=http_proxy=#{ENV['http_proxy']} ."
+    sh "docker build --pull -t #{docker_repo}:#{docker_tag} --build-arg=GEM_VERSION=#{ENV["GEM_VERSION"] || GVB.version} --build-arg=http_proxy=#{ENV['http_proxy']} ."
+    unless ENV["DOCKER_NO_LATEST"]
+      sh "docker tag #{docker_repo}:#{docker_tag} #{docker_repo}:latest"
+    end
   end
 
-  task :push => :build do
-    sh "docker tag discourse/syslogstash:#{GVB.version} discourse/syslogstash:latest"
-    sh "docker push discourse/syslogstash:#{GVB.version}"
-    sh "docker push discourse/syslogstash:latest"
+  desc "Upload image to a docker image registry"
+  task :publish => :build do
+    sh "docker push #{docker_repo}:#{docker_tag}"
+    unless ENV["DOCKER_NO_LATEST"]
+      sh "docker push #{docker_repo}:latest"
+    end
   end
 end
