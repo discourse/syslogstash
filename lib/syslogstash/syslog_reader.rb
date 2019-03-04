@@ -89,9 +89,9 @@ class Syslogstash::SyslogReader
         program:          program,
         pid:              pid.nil? ? nil : pid.to_i,
         message:          message,
-      ).to_json
+      )
 
-      @logstash.send_entry(log_entry)
+      @logstash.send_event(log_entry)
     else
       @logger.warn("reader") { "Unparseable message: #{msg.inspect}" }
     end
