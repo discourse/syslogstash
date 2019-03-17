@@ -69,7 +69,7 @@ class Syslogstash::SyslogReader
   attr_reader :config, :logger
 
   def process_message(msg)
-    if msg =~ /^<(\d+)>(\w{3} [ 0-9]{2} [0-9:]{8}) (.*)$/
+    if msg =~ /\A<(\d+)>(\w{3} [ 0-9]{2} [0-9:]{8}) (.*)\z/m
       flags     = $1.to_i
       timestamp = $2
       content   = $3
@@ -77,13 +77,13 @@ class Syslogstash::SyslogReader
       # Lo! the many ways that syslog messages can be formatted
       hostname, program, pid, message = case content
         # the gold standard: hostname, program name with optional PID
-        when /^([a-zA-Z0-9._-]*[^:]) (\S+?)(\[(\d+)\])?: (.*)$/
+        when /\A([a-zA-Z0-9._-]*[^:]) (\S+?)(\[(\d+)\])?: (.*)\z/m
           [$1, $2, $4, $5]
         # hostname, no program name
-        when /^([a-zA-Z0-9._-]+) (\S+[^:] .*)$/
+        when /\A([a-zA-Z0-9._-]+) (\S+[^:] .*)\z/m
           [$1, nil, nil, $2]
         # program name, no hostname (yeah, you heard me, non-RFC compliant!)
-        when /^(\S+?)(\[(\d+)\])?: (.*)$/
+        when /\A(\S+?)(\[(\d+)\])?: (.*)\z/m
           [nil, $1, $3, $4]
         else
           # I have NFI

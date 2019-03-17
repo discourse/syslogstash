@@ -88,6 +88,15 @@ describe Syslogstash::SyslogReader do
     reader.send(:process_message, "<74>Jan  2 03:04:05 myprogram[12345]: I'm on a boat!")
   end
 
+  it "parses a multi-line message" do
+    expect(mock_writer)
+      .to receive(:send_event) do |msg|
+        expect(msg[:message]).to eq("This is\na multiline\nmessage!")
+      end
+
+    reader.send(:process_message, "<74>Jan  2 03:04:05 myhost This is\na multiline\nmessage!")
+  end
+
   context "dropping messages" do
     let(:env) do
       base_env.merge(
