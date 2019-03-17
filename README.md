@@ -49,8 +49,8 @@ least, `syslogstash` needs to know where logstash is (`LOGSTASH_SERVER`),
 and the socket to listen on for syslog messages (`SYSLOG_SOCKET`).  You
 specify those on the command line, like so:
 
-    LOGSTASH_SERVER=logstash-json \
-      SYSLOG_SOCKET=/dev/log \
+    SYSLOGSTASH_LOGSTASH_SERVER=logstash-json \
+      SYSLOGSTASH_SYSLOG_SOCKET=/dev/log \
       syslogstash
 
 The full set of environment variables, and their meaning, is described in
@@ -91,6 +91,12 @@ aspects of runtime operation.  They are:
   won't drop *any* messages when retiring a logstash server -- just remove
   the logstash server from DNS, then SIGHUP syslogstash to make it switch
   to another server.
+
+* **`SIGQUIT`** -- dump thread stacktraces and allocation information to
+  `stderr`.
+
+* **`SIGINT`** / **`SIGTERM`** -- gracefully terminate.  Sending either signal
+  twice will cause shutdown to be done somewhat less gracefully.
 
 
 ## Use with Docker
@@ -139,8 +145,8 @@ All configuration of syslogstash is done by placing values in environment
 variables.  The environment variables that syslogstash recognises are listed
 below.
 
-* **`LOGSTASH_SERVER`** (required) -- the domain name or address of the
-  logstash server(s) you wish to send entries to.  This can be any of:
+* **`SYSLOGSTASH_LOGSTASH_SERVER`** (required) -- the domain name or address of
+  the logstash server(s) you wish to send entries to.  This can be any of:
 
   * An IPv4 address and port, separated by a colon.  For example,
     `192.0.2.42:5151`.  The port *must* be specified.
@@ -161,35 +167,33 @@ below.
   In all cases, syslogstash respects DNS record TTLs and SRV record
   weight/priority selection rules.  We're not monsters.
 
-* **`SYSLOG_SOCKET`** (required) -- the absolute path to the socket which
-  syslogstash should create and listen on for syslog format messages.
+* **`SYSLOGSTASH_SYSLOG_SOCKET`** (required) -- the absolute path to the socket
+  which syslogstash should create and listen on for syslog format messages.
 
-* **`BACKLOG_SIZE`** (optional; default `"1000000"`) -- the maximum number of
-  messages to queue if the logstash servers are unavailable.  Under normal
-  operation, syslog messages are immediately relayed to the logstash server
-  as they are received.  However, if no logstash servers are available,
-  syslogstash will maintain a backlog of up to this many syslog messages,
-  and will send the entire backlog once a logstash server becomes available
-  again.
+* **`SYSLOGSTASH_BACKLOG_SIZE`** (optional; default `"1000000"`) -- the maximum
+  number of messages to queue if the logstash servers are unavailable.  Under
+  normal operation, syslog messages are immediately relayed to the logstash
+  server as they are received.  However, if no logstash servers are available,
+  syslogstash will maintain a backlog of up to this many syslog messages, and
+  will send the entire backlog once a logstash server becomes available again.
 
     In the event that the queue size limit is reached, the oldest messages
     will be dropped to make way for the new ones.
 
-* **`RELAY_TO_STDOUT`** (optional; default `"no"`) -- if set to a
+* **`SYSLOGSTASH_RELAY_TO_STDOUT`** (optional; default `"no"`) -- if set to a
   true-ish string (any of `true`, `yes`, `on`, or `1`, compared
   case-insensitively), then all the syslog messages which are received will
   be printed to stdout (with the priority/facility prefix removed).  This
   isn't a replacement for a fully-featured syslog server, merely a quick way
   to dump messages if absolutely required.
 
-* **`STATS_SERVER`** (optional; default `"no"`) -- if set to a true-ish
-  string (any of `true`, `yes`, `on`, or `1`, compared case-insensitively),
-  then a Prometheus-compatible statistics exporter will be started,
-  listening on all interfaces on port 9159.
+* **`SYSLOGSTASH_METRICS_PORT`** (optional; default `""`) -- if set to a
+  valid port number (1-65535), a Prometheus-compatible statistics exporter will be
+  started, listening on all interfaces on the specified port.
 
-* **`ADD_FIELD_<name>`** (optional) -- if you want to add extra fields to
-  the entries which are forwarded to logstash, you can specify them here,
-  for example:
+* **`SYSLOGSTASH_ADD_FIELD_<name>`** (optional) -- if you want to add extra
+  fields to the entries which are forwarded to logstash, you can specify them
+  here, for example:
 
         ADD_FIELD_foo=bar ADD_FIELD_baz=wombat [...] syslogstash
 
@@ -199,17 +203,19 @@ below.
     than strings, are not supported.  Also, if you specify a field name also
     used by syslogstash, the results are explicitly undefined.
 
-* **`RELAY_SOCKETS`** (optional; default `""`) -- on the off-chance you want
-  to feed the syslog messages that syslogstash receives to another
+* **`SYSLOGSTASH_RELAY_SOCKETS`** (optional; default `""`) -- on the off-chance
+  you want to feed the syslog messages that syslogstash receives to another
   syslog-compatible consumer (say, an old-school syslogd) you can specify
-  additional filenames to use here.  Multiple socket filenames can be
-  specified by separating each file name with a colon.  Syslogstash will open
-  each of the specified sockets, if they exist, and write each received
-  message to the socket.  If the socket does not exist, or the open or write
-  operations fail, syslogstash **will not** retry.
+  additional filenames to use here.  Multiple socket filenames can be specified
+  by separating each file name with a colon.  Syslogstash will open each of the
+  specified sockets, if they exist, and write each received message to the
+  socket.  If the socket does not exist, or the open or write operations fail,
+  syslogstash **will not** retry.
 
-* **`DROP_REGEX`** (optional) -- Regular expression to run on input, if it
-  matches then the message will be dropped and not passed on
+* **`SYSLOGSTASH_DROP_REGEX`** (optional) -- Regular expression to run on
+  input, if it matches then the message will be dropped and not sent to
+  logstash.  However, it *will* still be sent to stdout and any relay sockets,
+  if those options are enabled.
 
 
 # Contributing
@@ -225,7 +231,7 @@ request](https://github.com/discourse/syslogstash/pulls].
 Unless otherwise stated, everything in this repo is covered by the following
 copyright notice:
 
-    Copyright (C) 2015, 2018 Civilized Discourse Construction Kit Inc.
+    Copyright (C) 2015, 2018, 2019 Civilized Discourse Construction Kit Inc.
 
     This program is free software: you can redistribute it and/or modify it
     under the terms of the GNU General Public License version 3, as

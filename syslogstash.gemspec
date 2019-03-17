@@ -23,6 +23,7 @@ Gem::Specification.new do |s|
 
   s.required_ruby_version = ">= 2.4.0"
 
+  s.add_runtime_dependency 'config_skeleton'
   s.add_runtime_dependency 'frankenstein'
   s.add_runtime_dependency 'logstash_writer'
   s.add_runtime_dependency 'rack'

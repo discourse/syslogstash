@@ -1,18 +1,20 @@
 require_relative './spec_helper'
+require "ostruct"
+
 require 'syslogstash'
 
 describe Syslogstash::SyslogReader do
-  let(:mock_writer) { instance_double(LogstashWriter) }
-  let(:stats) { {} }
-  let(:env) { {} }
-  let(:config) do
-    c = env.merge({
-      "LOGSTASH_SERVER" => "localhost",
-      "SYSLOG_SOCKET" => "/tmp/socket"
-    })
-    Syslogstash::Config.new(c, logger: Logger.new("/dev/null"))
+  let(:base_env) do
+    {
+      "SYSLOGSTASH_LOGSTASH_SERVER" => "localhost:5151",
+      "SYSLOGSTASH_SYSLOG_SOCKET"   => "/somewhere/funny",
+    }
   end
-  let(:reader)      { Syslogstash::SyslogReader.new(config, mock_writer, stats) }
+  let(:env) { base_env }
+
+  let(:mock_writer) { instance_double(LogstashWriter) }
+  let(:syslogstash) { Syslogstash.new(env) }
+  let(:reader) { Syslogstash::SyslogReader.new(syslogstash.config, mock_writer, syslogstash.metrics) }
 
   it "parses an all-features-on message" do
     expect(mock_writer)
@@ -88,9 +90,9 @@ describe Syslogstash::SyslogReader do
 
   context "dropping messages" do
     let(:env) do
-      {
-        'DROP_REGEX' => 'any.*thing|(b[ao]mbs and keys$)',
-      }
+      base_env.merge(
+        "SYSLOGSTASH_DROP_REGEX" => 'any.*thing|(b[ao]mbs and keys$)'
+      )
     end
 
     it "will correctly drop" do
@@ -103,17 +105,17 @@ describe Syslogstash::SyslogReader do
 
   context "with some tags" do
     let(:env) do
-      {
-        'ADD_FIELD_foo' => 'bar',
-        'ADD_FIELD_baz' => 'wombat'
-      }
+      base_env.merge(
+        'SYSLOGSTASH_ADD_FIELD_foo' => 'bar',
+        'SYSLOGSTASH_ADD_FIELD_baz' => 'wombat'
+      )
     end
 
     it "includes the tags" do
       expect(mock_writer)
         .to receive(:send_event) do |msg|
-         expect(msg['foo']).to eq('bar')
-         expect(msg['baz']).to eq('wombat')
+         expect(msg[:foo]).to eq('bar')
+         expect(msg[:baz]).to eq('wombat')
         end
 
       reader.send(:process_message, "<74>Jan  2 03:04:05 myhost myprogram[12345]: I'm on a boat!")

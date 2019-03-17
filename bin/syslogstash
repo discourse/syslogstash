@@ -1,62 +1,10 @@
 #!/usr/bin/env ruby
 
 require 'syslogstash'
-require 'logger'
-
-logger = Logger.new($stderr)
-logger.formatter = ->(s, t, p, m) { "#{s[0]} [#{p}] #{m}\n" }
-logger.level = Logger.const_get(ENV['SYSLOGSTASH_LOG_LEVEL'] || "INFO")
 
 begin
-  cfg = Syslogstash::Config.new(ENV, logger: logger)
-rescue Syslogstash::Config::ConfigurationError => ex
-  $stderr.puts "Error in configuration: #{ex.message}"
+  Syslogstash.new(ENV).start
+rescue ServiceSkeleton::Error::InvalidEnvironmentError => ex
+  $stderr.puts "Configuration error: #{ex.message}"
   exit 1
 end
-
-syslogstash = Syslogstash.new(cfg)
-
-sig_r, sig_w = IO.pipe
-
-Signal.trap("USR1") do
-  sig_w.print '1'
-end
-Signal.trap("USR2") do
-  sig_w.print '2'
-end
-Signal.trap("URG") do
-  sig_w.print 'U'
-end
-Signal.trap("HUP") do
-  sig_w.print 'H'
-end
-
-Thread.new do
-  loop do
-    begin
-      c = sig_r.getc
-      if c == '1'
-        logger.level -= 1 unless logger.level == Logger::DEBUG
-        logger.info("SignalHandler") { "Received SIGUSR1; log level is now #{Logger::SEV_LABEL[logger.level]}." }
-      elsif c == '2'
-        logger.level += 1 unless logger.level == Logger::ERROR
-        logger.info("SignalHandler") { "Received SIGUSR2; log level is now #{Logger::SEV_LABEL[logger.level]}." }
-      elsif c == 'U'
-        cfg.relay_to_stdout = !cfg.relay_to_stdout
-        logger.info("SignalHandler") { "Received SIGURG; Relaying to stdout is now #{cfg.relay_to_stdout ? "enabled" : "disabled"}" }
-      elsif c== 'H'
-        logger.info("SignalHandler") { "Received SIGHUP" }
-        syslogstash.force_disconnect!
-      else
-        logger.error("SignalHandler") { "Got an unrecognised character from signal pipe: #{c.inspect}" }
-      end
-    rescue StandardError => ex
-      logger.error("SignalHandler") { (["Exception raised: #{ex.message} (#{ex.class})"] + ex.backtrace).join("\n  ") }
-    rescue Exception => ex
-      $stderr.puts (["Fatal exception in syslogstash signal handler: #{ex.message} (#{ex.class})"] + ex.backtrace).join("\n  ")
-      exit 42
-    end
-  end
-end
-
-syslogstash.run
