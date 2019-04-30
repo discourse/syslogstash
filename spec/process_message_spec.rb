@@ -97,6 +97,15 @@ describe Syslogstash::SyslogReader do
     reader.send(:process_message, "<74>Jan  2 03:04:05 myhost This is\na multiline\nmessage!")
   end
 
+  it "parses an invalid UTF-8 message" do
+    expect(mock_writer)
+      .to receive(:send_event) do |msg|
+        expect(msg[:message]).to eq("This is br\uFFFDken")
+      end
+
+    reader.send(:process_message, "<74>Jan  2 03:04:05 myhost This is br\xE2ken")
+  end
+
   context "dropping messages" do
     let(:env) do
       base_env.merge(

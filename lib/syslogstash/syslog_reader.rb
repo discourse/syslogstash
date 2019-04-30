@@ -69,6 +69,8 @@ class Syslogstash::SyslogReader
   attr_reader :config, :logger
 
   def process_message(msg)
+    msg = msg.encode("UTF-8", invalid: :replace, undef: :replace)
+
     if msg =~ /\A<(\d+)>(\w{3} [ 0-9]{2} [0-9:]{8}) (.*)\z/m
       flags     = $1.to_i
       timestamp = $2
