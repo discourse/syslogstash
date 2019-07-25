@@ -38,7 +38,7 @@ class Syslogstash < ServiceSkeleton
   end
 
   def run
-    @writer.run
+    @writer.start!
     @reader.start!
 
     @shutdown_reader.getc
