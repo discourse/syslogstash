@@ -47,7 +47,7 @@ class Syslogstash < ServiceSkeleton
 
   def shutdown
     @reader.stop!
-    @writer.stop
+    @writer.stop!
 
     @shutdown_writer.close
   end
