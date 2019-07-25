@@ -1,3 +1,4 @@
+# frozen_string_literal: true
 require 'uri'
 require 'socket'
 require 'json'
@@ -10,7 +11,7 @@ require 'service_skeleton'
 #
 class Syslogstash < ServiceSkeleton
   string    :SYSLOGSTASH_LOGSTASH_SERVER
-  string    :SYSLOGSTASH_SYSLOG_SOCKET
+  string    :SYSLOGSTASH_SYSLOG_SOCKET, match: %r{\A(/.*|(tcp|udp|tcp\+udp)/\d+)\z}
   string    :SYSLOGSTASH_RELAY_TO_STDOUT, default: false
   string    :SYSLOGSTASH_DROP_REGEX, default: nil
   integer   :SYSLOGSTASH_BACKLOG_SIZE, default: 1_000_000, range: 0..(2**31-1)

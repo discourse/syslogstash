@@ -1,3 +1,4 @@
+# frozen_string_literal: true
 # A single socket reader.
 #
 class Syslogstash::SyslogReader
@@ -10,53 +11,104 @@ class Syslogstash::SyslogReader
 
     @shutdown_reader, @shutdown_writer = IO.pipe
 
+    @tcp_socket = nil
+    @udp_socket = nil
+    @unix_socket = nil
+
     super
+    logger.debug(logloc) { "initialized" }
   end
 
-  # Start reading from the socket file, parsing entries, and flinging
+  # Start reading from the socket, parsing entries, and flinging
   # them at logstash.
-  #
   def start
-    config.logger.debug(logloc) { "off we go!" }
+    logger.debug(logloc) { "off we go!" }
 
     begin
-      socket = Socket.new(Socket::AF_UNIX, Socket::SOCK_DGRAM, 0)
-      socket.bind(Socket.pack_sockaddr_un(config.syslog_socket))
-      File.chmod(0666, config.syslog_socket)
-    rescue Errno::EEXIST, Errno::EADDRINUSE
-      config.logger.info(logloc) { "socket file #{config.syslog_socket} already exists; deleting" }
-      File.unlink(config.syslog_socket) rescue nil
-      retry
+      if config.syslog_socket.start_with? 'tcp+udp/'
+        port = config.syslog_socket.slice(8..).to_i # lop off tcp+udp/
+        start_tcp(port)
+        start_udp(port)
+      elsif config.syslog_socket.start_with? 'tcp/'
+        port = config.syslog_socket.slice(4..).to_i # lop off tcp/
+        start_tcp(port)
+      elsif config.syslog_socket.start_with? 'udp/'
+        port = config.syslog_socket.slice(4..).to_i # lop off udp/
+        start_udp(port)
+      elsif config.syslog_socket.start_with? '/' # treat as a filename
+        start_unix(config.syslog_socket)
+      else
+        raise ArgumentError, "invalid syslog specification: #{config.syslog_socket}"
+      end
+    rescue ArgumentError
+      raise
     rescue StandardError => ex
       raise ex.class, "Error while trying to bind to #{config.syslog_socket}: #{ex.message}", ex.backtrace
     end
 
+    interesting_sockets = [@shutdown_reader, @unix_socket, @udp_socket, @tcp_socket].compact
+    # list of connected clients
+    tcp_connected_fds = []
+
     begin
-      loop do
-        IO.select([@shutdown_reader, socket]).first.each do |fd|
-          if fd == socket
+      while !@shutdown_reader.closed? do
+        IO.select(interesting_sockets + tcp_connected_fds, nil, nil).first.each do |fd|
+          if fd == @udp_socket || fd == @unix_socket
             begin
-              msg = socket.recvmsg_nonblock
+              msg = fd.recvmsg_nonblock
             rescue IO::WaitWritable
-              config.logger.debug(logloc) { "select said a message was waiting, but it wasn't.  o.O" }
+              logger.debug(logloc) { "select said a message was waiting, but it wasn't.  o.O" }
             else
-              config.logger.debug(logloc) { "Message received: #{msg.inspect}" }
-              @metrics.messages_received_total.increment(socket_path: config.syslog_socket)
-              @metrics.queue_size.increment({})
-              relay_message msg.first
-              process_message msg.first.chomp
+              logger.debug(logloc) { "Message received: #{msg.inspect}" }
+              process_message msg.first
+            end
+          elsif fd == @tcp_socket
+            # a new connection has arrived
+            client = StreamSocket.new(fd.accept, logger)
+            tcp_connected_fds << client
+            logger.debug(logloc) { "accepted connection on #{client}" }
+          elsif tcp_connected_fds.include? fd
+            # data incoming from existing tcp socket
+            fd.read_messages do |message|
+              logger.debug(logloc) { "Message received: #{message.inspect}" }
+              process_message message
+            end
+            if fd.finished?
+              fd.close
+              tcp_connected_fds.delete fd
             end
           elsif fd == @shutdown_reader
             @shutdown_reader.close
-            config.logger.debug(logloc) { "Tripped over shutdown reader" }
-            break
+            logger.debug(logloc) { "Tripped over shutdown reader" }
           end
         end
       end
     ensure
-      socket.close
-      config.logger.debug(logloc) { "removing socket file #{config.syslog_socket}" }
-      File.unlink(config.syslog_socket) rescue nil
+      # close all of our sockets
+      if !@tcp_socket.nil?
+        @tcp_socket.close
+        logger.debug(logloc) { "closed stream socket #{config.syslog_socket}" }
+      end
+      if !@udp_socket.nil?
+        @udp_socket.close
+        logger.debug(logloc) { "closed datagram socket #{config.syslog_socket}" }
+      end
+      if !@unix_socket.nil?
+        @unix_socket.close
+        logger.debug(logloc) { "removing socket file #{config.syslog_socket}" }
+        File.unlink(config.syslog_socket) rescue nil
+      end
+
+      # close all our TCP connections, if any
+      tcp_connected_fds.each do |fd|
+        fd.read_messages(final: true) do |message|
+          logger.debug(logloc) { "Message received: #{message.inspect}" }
+          process_message message
+        end
+        logger.debug(logloc) { "(shutting down) closing connection #{fd}" }
+        fd.close
+      end
+      logger.debug(logloc) { "shutdown complete" }
     end
   end
 
@@ -68,8 +120,55 @@ class Syslogstash::SyslogReader
 
   attr_reader :config, :logger
 
+  def start_tcp(port)
+    begin
+      @tcp_socket&.close
+      @tcp_socket = TCPServer.new('::', port)
+      logger.info(logloc) { "started TCP server on port #{port}" }
+    rescue Errno::EADDRINUSE
+      logger.info(logloc) { "tcp socket for #{config.syslog_socket} already in use" }
+      sleep 1
+      retry
+    end
+  end
+
+  def start_udp(port)
+    begin
+      @udp_socket&.close
+      @udp_socket = Socket.new(Socket::AF_INET6, Socket::SOCK_DGRAM, 0)
+      @udp_socket.bind(Socket.pack_sockaddr_in(port, '::' ))
+      logger.info(logloc) { "started UDP server on port #{port}" }
+    rescue Errno::EADDRINUSE
+      logger.info(logloc) { "udp socket for #{config.syslog_socket} already in use" }
+      sleep 1
+      retry
+    end
+  end
+
+  def start_unix(path)
+    begin
+      @unix_socket&.close
+      @unix_socket = Socket.new(Socket::AF_UNIX, Socket::SOCK_DGRAM, 0)
+      @unix_socket.bind(Socket.pack_sockaddr_un(path))
+      logger.info(logloc) { "started UNIX listener on #{config.syslog_socket}" }
+      File.chmod(0666, path)
+    rescue Errno::EEXIST, Errno::EADDRINUSE
+      logger.info(logloc) { "socket #{config.syslog_socket} already exists; deleting" }
+      File.unlink(config.syslog_socket) rescue nil
+      retry
+    end
+  end
+
   def process_message(msg)
-    msg = msg.encode("UTF-8", invalid: :replace, undef: :replace)
+    @metrics.messages_received_total.increment(socket_path: config.syslog_socket)
+    @metrics.queue_size.increment({})
+    relay_message msg
+    logstash_message msg
+    @metrics.queue_size.decrement({})
+  end
+
+  def logstash_message(msg)
+    msg = msg.chomp.encode("UTF-8", invalid: :replace, undef: :replace)
 
     if msg =~ /\A<(\d+)>(\w{3} [ 0-9]{2} [0-9:]{8}) (.*)\z/m
       flags     = $1.to_i
@@ -94,7 +193,7 @@ class Syslogstash::SyslogReader
 
       if config.drop_regex && message && message.match?(config.drop_regex)
         @metrics.dropped_total.increment({})
-        config.logger.debug(logloc) { "dropping message #{message}" }
+        logger.debug(logloc) { "dropping message #{message}" }
         return
       end
 
@@ -113,7 +212,7 @@ class Syslogstash::SyslogReader
 
       @logstash.send_event(log_entry)
     else
-      config.logger.warn(logloc) { "Unparseable message: #{msg.inspect}" }
+      logger.warn(logloc) { "Unparseable message: #{msg.inspect}" }
     end
   end
 
@@ -128,7 +227,7 @@ class Syslogstash::SyslogReader
       e.merge!(h.delete_if { |k,v| v.nil? })
       e.merge!(config.add_fields)
 
-      config.logger.debug(logloc) { "Complete log entry is: #{e.inspect}" }
+      logger.debug(logloc) { "Complete log entry is: #{e.inspect}" }
     end
   end
 
@@ -156,7 +255,7 @@ class Syslogstash::SyslogReader
         # reporting it.  People will figure it out themselves soon enough.
       rescue StandardError => ex
         unless @currently_failed[f]
-          config.logger.warn(logloc) { "Error while connecting to relay socket #{f}: #{ex.message} (#{ex.class})" }
+          logger.warn(logloc) { "Error while connecting to relay socket #{f}: #{ex.message} (#{ex.class})" }
           @currently_failed[f] = true
         end
         return
@@ -168,21 +267,21 @@ class Syslogstash::SyslogReader
         # messages quick enough.
         s.sendmsg_nonblock(msg)
         if @currently_failed[f]
-          config.logger.info(logloc) { "Error on socket #{f} has cleared; messages are being delivered again" }
+          logger.info(logloc) { "Error on socket #{f} has cleared; messages are being delivered again" }
           @currently_failed[f] = false
         end
       rescue Errno::ENOTCONN
         unless @currently_failed[f]
-          config.logger.debug(logloc) { "Nothing is listening on socket #{f}" }
+          logger.debug(logloc) { "Nothing is listening on socket #{f}" }
           @currently_failed[f] = true
         end
       rescue IO::EAGAINWaitWritable
         unless @currently_failed[f]
-          config.logger.warn(logloc) { "Socket #{f} is currently backlogged; messages to this socket are now being discarded undelivered" }
+          logger.warn(logloc) { "Socket #{f} is currently backlogged; messages to this socket are now being discarded undelivered" }
           @currently_failed[f] = true
         end
       rescue StandardError => ex
-        config.logger.warn(logloc) { (["Failed to relay message to socket #{f} from #{config.syslog_socket}: #{ex.message} (#{ex.class})"] + ex.backtrace).join("\n  ") }
+        logger.warn(logloc) { (["Failed to relay message to socket #{f} from #{config.syslog_socket}: #{ex.message} (#{ex.class})"] + ex.backtrace).join("\n  ") }
       end
     ensure
       s.close
@@ -216,3 +315,5 @@ class Syslogstash::SyslogReader
     debug
   }
 end
+
+require_relative 'syslog_reader/stream_socket'

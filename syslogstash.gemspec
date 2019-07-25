@@ -23,10 +23,10 @@ Gem::Specification.new do |s|
 
   s.required_ruby_version = ">= 2.4.0"
 
-  s.add_runtime_dependency 'service_skeleton'
   s.add_runtime_dependency 'frankenstein'
   s.add_runtime_dependency 'logstash_writer'
   s.add_runtime_dependency 'rack'
+  s.add_runtime_dependency 'service_skeleton', '~> 0.0.0.44.g75d07d7'
 
   s.add_development_dependency 'bundler'
   s.add_development_dependency 'github-release'
