@@ -31,7 +31,6 @@ class Syslogstash < ServiceSkeleton
     metrics.counter(:syslogstash_messages_received_total, "The number of syslog messages received from the log socket")
     metrics.counter(:syslogstash_messages_sent_total, "The number of logstash messages sent to each logstash server")
     metrics.gauge(:syslogstash_last_relayed_message_timestamp, "When the last message that was successfully relayed to logstash was originally received")
-    metrics.gauge(:syslogstash_queue_size, "How many messages are currently in the queue to be sent")
     metrics.counter(:syslogstash_dropped_total, "Number of log entries that were not forwarded due to matching the drop regex")
 
     @writer = LogstashWriter.new(server_name: config.logstash_server, backlog: config.backlog_size, logger: config.logger, metrics_registry: metrics)

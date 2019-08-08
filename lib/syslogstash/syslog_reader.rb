@@ -161,10 +161,8 @@ class Syslogstash::SyslogReader
 
   def process_message(msg)
     @metrics.messages_received_total.increment(socket_path: config.syslog_socket)
-    @metrics.queue_size.increment({})
     relay_message msg
     logstash_message msg
-    @metrics.queue_size.decrement({})
   end
 
   def logstash_message(msg)
