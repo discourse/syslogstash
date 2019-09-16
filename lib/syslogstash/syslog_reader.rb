@@ -4,6 +4,8 @@
 class Syslogstash::SyslogReader
   include ServiceSkeleton::BackgroundWorker
 
+  class UnparseableMessage < StandardError; end
+
   def initialize(config, logstash, metrics)
     @config, @logstash, @metrics = config, logstash, metrics
 
@@ -165,16 +167,16 @@ class Syslogstash::SyslogReader
     logstash_message msg
   end
 
-  def logstash_message(msg)
-    msg = msg.chomp.encode("UTF-8", invalid: :replace, undef: :replace)
-
+  def extract_log_entry_from_message(msg)
     if msg =~ /\A<(\d+)>(\w{3} [ 0-9]{2} [0-9:]{8}) (.*)\z/m
+      # most everything except our special snowflake: Cisco
       flags     = $1.to_i
       timestamp = $2
       content   = $3
 
       # Lo! the many ways that syslog messages can be formatted
-      hostname, program, pid, message = case content
+      hostname, program, pid, message =
+        case content
         # the gold standard: hostname, program name with optional PID
         when /\A([a-zA-Z0-9._-]*[^:]) (\S+?)(\[(\d+)\])?: (.*)\z/m
           [$1, $2, $4, $5]
@@ -187,29 +189,62 @@ class Syslogstash::SyslogReader
         else
           # I have NFI
           [nil, nil, nil, content]
-      end
+        end
 
-      if config.drop_regex && message && message.match?(config.drop_regex)
-        @metrics.dropped_total.increment({})
-        logger.debug(logloc) { "dropping message #{message}" }
-        return
-      end
-
-      severity = flags % 8
-      facility = flags / 8
-
-      log_entry = log_entry(
+      log_entry(
         syslog_timestamp: timestamp,
-        severity:         severity,
-        facility:         facility,
+        severity:         flags % 8,
+        facility:         flags / 8,
         hostname:         hostname,
         program:          program,
         pid:              pid.nil? ? nil : pid.to_i,
         message:          message,
       )
+    elsif msg =~ /\A<(\d+)>(\d+): (?:([^ :]+): )?(\w{3} [ 0-9]{2} [0-9:]{8}\.[0-9]{3}): (.*)\z/m
+      # aforementioned special snowflake: Cisco IOS
+      # e.g.: <157>6223: switch01.sjc3: Sep 16 18:35:06.954: %PARSER-5-CFGLOG_LOGGEDCMD: command
+      flags     = $1.to_i
+      seq_num   = $2
+      hostname  = $3 # optional
+      timestamp = $4
+      content   = $5
 
-      @logstash.send_event(log_entry)
+      program, message =
+        case content
+        # IOS: %ID: details
+        when /\A%([^:]+): (.*)\z/m
+          [$1, $2]
+        else
+          # I have NFI
+          [nil, content]
+        end
+
+      log_entry(
+        syslog_timestamp: timestamp,
+        severity:         flags % 8,
+        facility:         flags / 8,
+        hostname:         hostname,
+        program:          program,
+        pid:              nil,
+        message:          message,
+        #seq_num:          seq_num, # (deliberately leaving this noise out)
+      )
     else
+      raise UnparseableMessage
+    end
+  end
+
+  def logstash_message(msg)
+    msg = msg.chomp.encode("UTF-8", invalid: :replace, undef: :replace)
+    begin
+      log_entry = extract_log_entry_from_message(msg)
+      if config.drop_regex && log_entry[:message].match?(config.drop_regex)
+        @metrics.dropped_total.increment({})
+        logger.debug(logloc) { "dropping message #{msg}" }
+        return
+      end
+      @logstash.send_event(log_entry)
+    rescue UnparseableMessage
       logger.warn(logloc) { "Unparseable message: #{msg.inspect}" }
     end
   end

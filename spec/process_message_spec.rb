@@ -88,6 +88,42 @@ describe Syslogstash::SyslogReader do
     reader.send(:process_message, "<74>Jan  2 03:04:05 myprogram[12345]: I'm on a boat!")
   end
 
+  it "parses an IOS message with hostname" do
+    expect(mock_writer)
+      .to receive(:send_event) do |msg|
+        expect(msg['@version']).to eq('1')
+        expect(msg['@timestamp']).to match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
+
+        expect(msg[:hostname]).to eq('switch01.sjc3')
+        expect(msg[:program]).to eq('SEC_LOGIN-5-LOGIN_SUCCESS')
+        expect(msg[:pid]).to be_nil
+        expect(msg[:syslog_timestamp]).to eq('Sep 16 18:17:23.009')
+        expect(msg[:message]).to eq("Login Success [user: admin]")
+        expect(msg[:severity_name]).to eq('notice')
+        expect(msg[:facility_name]).to eq('local7')
+      end
+
+    reader.send(:process_message, "<157>6214: switch01.sjc3: Sep 16 18:17:23.009: %SEC_LOGIN-5-LOGIN_SUCCESS: Login Success [user: admin]")
+  end
+
+  it "parses an IOS message without hostname" do
+    expect(mock_writer)
+      .to receive(:send_event) do |msg|
+        expect(msg['@version']).to eq('1')
+        expect(msg['@timestamp']).to match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
+
+        expect(msg[:hostname]).to be_nil
+        expect(msg[:program]).to eq('SEC_LOGIN-5-LOGIN_SUCCESS')
+        expect(msg[:pid]).to be_nil
+        expect(msg[:syslog_timestamp]).to eq('Sep 16 18:17:23.009')
+        expect(msg[:message]).to eq("Login Success [user: admin]")
+        expect(msg[:severity_name]).to eq('notice')
+        expect(msg[:facility_name]).to eq('local7')
+      end
+
+    reader.send(:process_message, "<157>6214: Sep 16 18:17:23.009: %SEC_LOGIN-5-LOGIN_SUCCESS: Login Success [user: admin]")
+  end
+
   it "parses a multi-line message" do
     expect(mock_writer)
       .to receive(:send_event) do |msg|
