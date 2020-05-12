@@ -321,6 +321,8 @@ class Syslogstash::SyslogReader
     end
   end
 
+  # There is a gap between 12-15 inclusive
+  # We need to define them to ensure the local0-7 facilities line up correctly
   FACILITIES = %w{
     kern
     user
@@ -334,6 +336,10 @@ class Syslogstash::SyslogReader
     cron
     authpriv
     ftp
+    facility12
+    facility13
+    facility14
+    facility15
     local0 local1 local2 local3 local4 local5 local6 local7
   }
 

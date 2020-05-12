@@ -100,7 +100,7 @@ describe Syslogstash::SyslogReader do
         expect(msg[:syslog_timestamp]).to eq('Sep 16 18:17:23.009')
         expect(msg[:message]).to eq("Login Success [user: admin]")
         expect(msg[:severity_name]).to eq('notice')
-        expect(msg[:facility_name]).to eq('local7')
+        expect(msg[:facility_name]).to eq('local3')
       end
 
     reader.send(:process_message, "<157>6214: switch01.sjc3: Sep 16 18:17:23.009: %SEC_LOGIN-5-LOGIN_SUCCESS: Login Success [user: admin]")
@@ -118,7 +118,7 @@ describe Syslogstash::SyslogReader do
         expect(msg[:syslog_timestamp]).to eq('Sep 16 18:17:23.009')
         expect(msg[:message]).to eq("Login Success [user: admin]")
         expect(msg[:severity_name]).to eq('notice')
-        expect(msg[:facility_name]).to eq('local7')
+        expect(msg[:facility_name]).to eq('local3')
       end
 
     reader.send(:process_message, "<157>6214: Sep 16 18:17:23.009: %SEC_LOGIN-5-LOGIN_SUCCESS: Login Success [user: admin]")
