@@ -124,6 +124,70 @@ describe Syslogstash::SyslogReader do
     reader.send(:process_message, "<157>6214: Sep 16 18:17:23.009: %SEC_LOGIN-5-LOGIN_SUCCESS: Login Success [user: admin]")
   end
 
+  it "adds information to a message with no timestamp or hostname received over IPv4" do
+    expect(mock_writer)
+      .to receive(:send_event) do |msg|
+        expect(msg['@version']).to eq('1')
+        expect(msg['@timestamp']).to match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
+
+        expect(msg[:hostname]).to eq '172.16.1.142'
+        expect(msg[:program]).to eq('snmpd')
+        expect(msg[:pid]).to eq 26572
+        expect(msg[:syslog_timestamp]).to eq('Jan  9 01:02:03')
+        expect(msg[:message]).to eq("[snmpd.NOTICE]: Got SNMP request from ip 172.16.1.100")
+        expect(msg[:severity_name]).to eq('notice')
+        expect(msg[:facility_name]).to eq('local7')
+      end
+
+    locked_time = Time.utc(2020, 1, 9, 1, 2, 3)
+    allow(Time).to receive(:now).and_return(locked_time)
+    addrinfo = Addrinfo.new(Socket.sockaddr_in(54321, '172.16.1.142'))
+    reader.send(:process_message, "<189>snmpd[26572]: [snmpd.NOTICE]: Got SNMP request from ip 172.16.1.100", remote: addrinfo)
+  end
+
+  it "adds information to a message with no timestamp or hostname received over IPv6" do
+    expect(mock_writer)
+      .to receive(:send_event) do |msg|
+        expect(msg['@version']).to eq('1')
+        expect(msg['@timestamp']).to match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
+
+        expect(msg[:hostname]).to eq '2001:db8::f00f:1'
+        expect(msg[:program]).to eq('snmpd')
+        expect(msg[:pid]).to eq 26572
+        expect(msg[:syslog_timestamp]).to eq('Jan  9 01:02:03')
+        expect(msg[:message]).to eq("[snmpd.NOTICE]: Got SNMP request from ip 172.16.1.100")
+        expect(msg[:severity_name]).to eq('notice')
+        expect(msg[:facility_name]).to eq('local7')
+      end
+
+    locked_time = Time.utc(2020, 1, 9, 1, 2, 3)
+    allow(Time).to receive(:now).and_return(locked_time)
+    addrinfo = Addrinfo.new(Socket.sockaddr_in(54321, '2001:db8::f00f:1'))
+    reader.send(:process_message, "<189>snmpd[26572]: [snmpd.NOTICE]: Got SNMP request from ip 172.16.1.100", remote: addrinfo)
+  end
+
+  it "adds information to a message with no timestamp or hostname received over a unix socket" do
+    addrinfo = Addrinfo.new(Socket.sockaddr_un('/tmp/spec.socket'))
+
+    expect(mock_writer)
+      .to receive(:send_event) do |msg|
+        expect(msg['@version']).to eq('1')
+        expect(msg['@timestamp']).to match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
+
+        expect(msg[:hostname]).to eq "#{addrinfo.getnameinfo.first}"
+        expect(msg[:program]).to eq('metad')
+        expect(msg[:pid]).to eq 2466
+        expect(msg[:syslog_timestamp]).to eq('Jan  9 01:02:03')
+        expect(msg[:message]).to eq("TID 139915579090752: [metad.NOTICE]: Sending final query response for msg_id '117065370' (no error, has resp)")
+        expect(msg[:severity_name]).to eq('notice')
+        expect(msg[:facility_name]).to eq('local1')
+      end
+
+    locked_time = Time.utc(2020, 1, 9, 1, 2, 3)
+    allow(Time).to receive(:now).and_return(locked_time)
+    reader.send(:process_message, "<141>metad[2466]: TID 139915579090752: [metad.NOTICE]: Sending final query response for msg_id '117065370' (no error, has resp)", remote: addrinfo)
+  end
+
   it "parses a multi-line message" do
     expect(mock_writer)
       .to receive(:send_event) do |msg|

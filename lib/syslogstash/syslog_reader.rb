@@ -62,7 +62,8 @@ class Syslogstash::SyslogReader
               logger.debug(logloc) { "select said a message was waiting, but it wasn't.  o.O" }
             else
               logger.debug(logloc) { "Message received: #{msg.inspect}" }
-              process_message msg.first
+              message, remote = msg
+              process_message message, remote: remote
             end
           elsif fd == @tcp_socket
             # a new connection has arrived
@@ -73,7 +74,7 @@ class Syslogstash::SyslogReader
             # data incoming from existing tcp socket
             fd.read_messages do |message|
               logger.debug(logloc) { "Message received: #{message.inspect}" }
-              process_message message
+              process_message message, remote: fd.cached_remote_address
             end
             if fd.finished?
               fd.close
@@ -105,7 +106,7 @@ class Syslogstash::SyslogReader
       tcp_connected_fds.each do |fd|
         fd.read_messages(final: true) do |message|
           logger.debug(logloc) { "Message received: #{message.inspect}" }
-          process_message message
+          process_message message, remote: fd.cached_remote_address
         end
         logger.debug(logloc) { "(shutting down) closing connection #{fd}" }
         fd.close
@@ -161,13 +162,13 @@ class Syslogstash::SyslogReader
     end
   end
 
-  def process_message(msg)
+  def process_message(msg, remote: nil)
     @metrics.messages_received_total.increment(socket_path: config.syslog_socket)
     relay_message msg
-    logstash_message msg
+    logstash_message msg, remote
   end
 
-  def extract_log_entry_from_message(msg)
+  def extract_log_entry_from_message(msg, remote: nil)
     if msg =~ /\A<(\d+)>(\w{3} [ 0-9]{2} [0-9:]{8}) (.*)\z/m
       # most everything except our special snowflake: Cisco
       flags     = $1.to_i
@@ -229,15 +230,47 @@ class Syslogstash::SyslogReader
         message:          message,
         #seq_num:          seq_num, # (deliberately leaving this noise out)
       )
+    elsif msg =~ /\A<(\d+)>(\S+)\[(\d+)\]: (.*)\z/m
+      # ANOTHER SNOWFLAKE: Mellanox Onyx doesn't send a timestamp OR a hostname
+      # try and make this regex as specific as possible to avoid snaring other things
+      # example lines:
+      # <189>snmpd[26572]: [snmpd.NOTICE]: Got SNMP request from ip 172.16.1.100
+      # <189>cli[962]: [cli.NOTICE]: user admin: Entering configuration mode
+      # <141>metad[2466]: TID 139915579090752: [metad.NOTICE]: Sending final query response for msg_id '117065370' (no error, has resp)
+      flags     = $1.to_i
+      hostname  = case remote.afamily
+                  when Socket::AF_INET
+                    remote.getnameinfo.first
+                  when Socket::AF_INET6
+                    remote.getnameinfo.first
+                  when Socket::AF_UNIX
+                    remote.getnameinfo.first
+                  else
+                    'unknownhost'
+                  end
+      timestamp = Time.now.utc.strftime('%b %e %H:%M:%S')
+      program   = $2
+      pid       = $3.to_i
+      message   = $4
+
+      log_entry(
+        syslog_timestamp: timestamp,
+        severity:         flags % 8,
+        facility:         flags / 8,
+        hostname:         hostname,
+        program:          program,
+        pid:              pid,
+        message:          message,
+      )
     else
       raise UnparseableMessage
     end
   end
 
-  def logstash_message(msg)
+  def logstash_message(msg, remote)
     msg = msg.chomp.encode("UTF-8", invalid: :replace, undef: :replace)
     begin
-      log_entry = extract_log_entry_from_message(msg)
+      log_entry = extract_log_entry_from_message(msg, remote: remote)
       if config.drop_regex && log_entry[:message].match?(config.drop_regex)
         @metrics.dropped_total.increment({})
         logger.debug(logloc) { "dropping message #{msg}" }

@@ -7,6 +7,8 @@ class Syslogstash::SyslogReader::StreamSocket
     @logger = logger
     # we don't have access to the remote peer information
     # after the socket is closed, so let's note this down for later
+    @cached_remote_address = @fd.remote_address
+
     @remote_address = begin
       if @fd.local_address.afamily == Socket::AF_UNIX
         Socket.unpack_sockaddr_un(fd.getpeername).to_s
@@ -18,6 +20,8 @@ class Syslogstash::SyslogReader::StreamSocket
     # we're not ever going to write to it
     fd.close_write
   end
+
+  attr_accessor :cached_remote_address
 
   def finished?
     @finished
