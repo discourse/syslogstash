@@ -201,7 +201,7 @@ class Syslogstash::SyslogReader
         pid:              pid.nil? ? nil : pid.to_i,
         message:          message,
       )
-    elsif msg =~ /\A<(\d+)>(\d+): (?:([^ :]+): )?(\w{3} [ 0-9]{2} [0-9:]{8}\.[0-9]{3}): (.*)\z/m
+    elsif msg =~ /\A<(\d+)>(\d+): (?:([^ :]+): )?(\*?\w{3} [ 0-9]{2} [0-9:]{8}\.[0-9]{3}): (.*)\z/m
       # aforementioned special snowflake: Cisco IOS
       # e.g.: <157>6223: switch01.sjc3: Sep 16 18:35:06.954: %PARSER-5-CFGLOG_LOGGEDCMD: command
       flags     = $1.to_i
@@ -219,6 +219,10 @@ class Syslogstash::SyslogReader
           # I have NFI
           [nil, content]
         end
+
+      if timestamp.start_with? '*'
+        timestamp = Time.now.utc.strftime('%b %e %H:%M:%S')
+      end
 
       log_entry(
         syslog_timestamp: timestamp,

@@ -124,6 +124,24 @@ describe Syslogstash::SyslogReader do
     reader.send(:process_message, "<157>6214: Sep 16 18:17:23.009: %SEC_LOGIN-5-LOGIN_SUCCESS: Login Success [user: admin]")
   end
 
+  it "fixes the time on a message with unsynced timestamp" do
+    expect(mock_writer)
+      .to receive(:send_event) do |msg|
+        expect(msg['@version']).to eq('1')
+        expect(msg['@timestamp']).to match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
+
+        expect(msg[:hostname]).to be_nil
+        expect(msg[:program]).to eq('DOT11-6-ASSOC')
+        expect(msg[:pid]).to be_nil
+        expect(msg[:syslog_timestamp]).to_not eq('Apr 28 10:14:29.608')
+        expect(msg[:message]).to eq("Interface Dot11Radio1, Station   c0ff.eec0.ffee Associated KEY_MGMT[WPAv2 PSK]")
+        expect(msg[:severity_name]).to eq('info')
+        expect(msg[:facility_name]).to eq('local3')
+      end
+
+    reader.send(:process_message, "<158>11600: *Apr 28 10:14:29.608: %DOT11-6-ASSOC: Interface Dot11Radio1, Station   c0ff.eec0.ffee Associated KEY_MGMT[WPAv2 PSK]")
+  end
+
   it "adds information to a message with no timestamp or hostname received over IPv4" do
     expect(mock_writer)
       .to receive(:send_event) do |msg|
