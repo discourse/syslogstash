@@ -3,18 +3,55 @@ require "ostruct"
 
 require 'syslogstash'
 
-describe Syslogstash::SyslogReader do
-  let(:base_env) do
-    {
-      "SYSLOGSTASH_LOGSTASH_SERVER" => "localhost:5151",
-      "SYSLOGSTASH_SYSLOG_SOCKET"   => "/somewhere/funny",
-    }
-  end
-  let(:env) { base_env }
+class MockConfig
+  attr_accessor :drop_regex
+  attr_reader :logger
 
+  def initialize(logger)
+    @logger = logger
+  end
+
+  def syslog_socket
+    "/somewhere/funny".dup
+  end
+
+  def relay_to_stdout
+    false
+  end
+
+  def relay_sockets
+    []
+  end
+
+  def add_fields
+    @add_fields ||= {}
+  end
+end
+
+class MockMetrics
+  def dropped_total
+    @dropped_total ||=
+      Prometheus::Client::Counter.new(
+        :dropped_total,
+        docstring: 'Number of log entries that were not forwarded due to matching the drop regex',
+      )
+  end
+
+  def messages_received_total
+    @messages_received_total ||=
+      Prometheus::Client::Counter.new(
+        :messages_received_total,
+        docstring: 'The number of syslog message received from the log socket',
+      )
+  end
+end
+
+describe Syslogstash::SyslogReader do
   let(:mock_writer) { instance_double(LogstashWriter) }
-  let(:syslogstash) { Syslogstash.new(env) }
-  let(:reader) { Syslogstash::SyslogReader.new(syslogstash.config, mock_writer, syslogstash.metrics) }
+  let(:logger) { Logger.new('/dev/null') }
+  let(:mock_config) { MockConfig.new(logger) }
+  let(:mock_metrics) { MockMetrics.new }
+  let(:reader) { Syslogstash::SyslogReader.new(mock_config, mock_writer, mock_metrics) }
 
   it "parses an all-features-on message" do
     expect(mock_writer)
@@ -225,10 +262,8 @@ describe Syslogstash::SyslogReader do
   end
 
   context "dropping messages" do
-    let(:env) do
-      base_env.merge(
-        "SYSLOGSTASH_DROP_REGEX" => 'any.*thing|(b[ao]mbs and keys$)'
-      )
+    before do
+      mock_config.drop_regex = 'any.*thing|(b[ao]mbs and keys$)'
     end
 
     it "will correctly drop" do
@@ -240,11 +275,8 @@ describe Syslogstash::SyslogReader do
   end
 
   context "with some tags" do
-    let(:env) do
-      base_env.merge(
-        'SYSLOGSTASH_ADD_FIELD_foo' => 'bar',
-        'SYSLOGSTASH_ADD_FIELD_baz' => 'wombat'
-      )
+    before do
+      mock_config.add_fields.merge!(foo: 'bar', baz: 'wombat')
     end
 
     it "includes the tags" do
