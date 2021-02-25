@@ -8,14 +8,16 @@ require 'deep_merge'
 TIMESTAMP_FORMAT = '%FT%T.%3NZ'
 
 class Syslogstash::SyslogReader
-  include ServiceSkeleton::BackgroundWorker
+  include ServiceSkeleton::LoggingHelpers
 
   class UnparseableMessage < StandardError; end
 
   def initialize(config, logstash, metrics)
-    @config, @logstash, @metrics = config, logstash, metrics
+    @config   = config
+    @logstash = logstash
+    @metrics  = metrics
 
-    @logger = config.logger
+    @logger   = config.logger
 
     @shutdown_reader, @shutdown_writer = IO.pipe
 
@@ -23,13 +25,12 @@ class Syslogstash::SyslogReader
     @udp_socket = nil
     @unix_socket = nil
 
-    super
-    logger.debug(logloc) { "initialized" }
+    @logger.debug(logloc) { "initialized" }
   end
 
   # Start reading from the socket, parsing entries, and flinging
   # them at logstash.
-  def start
+  def start!
     logger.debug(logloc) { "off we go!" }
 
     begin
@@ -186,7 +187,7 @@ class Syslogstash::SyslogReader
   end
 
   def process_message(msg, remote: nil)
-    @metrics.messages_received_total.increment(socket_path: config.syslog_socket)
+    @metrics.messages_received_total.increment(labels: { socket_path: config.syslog_socket })
     relay_message msg
     logstash_message msg, remote
   end

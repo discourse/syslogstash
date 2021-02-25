@@ -45,6 +45,7 @@ class MockMetrics
       Prometheus::Client::Counter.new(
         :messages_received_total,
         docstring: 'The number of syslog message received from the log socket',
+        labels: [:socket_path],
       )
   end
 end
