@@ -1,7 +1,11 @@
 require_relative './spec_helper'
 require "ostruct"
-
 require 'syslogstash'
+
+class ServiceSkeleton::Runner
+  attr_reader :config
+  attr_reader :metrics
+end
 
 describe Syslogstash::SyslogReader do
   let(:base_env) do
@@ -13,8 +17,10 @@ describe Syslogstash::SyslogReader do
   let(:env) { base_env }
 
   let(:mock_writer) { instance_double(LogstashWriter) }
-  let(:syslogstash) { Syslogstash.new(env) }
-  let(:reader) { Syslogstash::SyslogReader.new(syslogstash.config, mock_writer, syslogstash.metrics) }
+  let(:syslogstash) { ServiceSkeleton::Runner.new(Syslogstash, env) }
+
+  let(:logger) { Logger.new("/dev/null") }
+  let(:reader) { Syslogstash::SyslogReader.new(syslogstash.config, mock_writer, syslogstash.metrics, logger) }
 
   it "parses an all-features-on message" do
     expect(mock_writer)

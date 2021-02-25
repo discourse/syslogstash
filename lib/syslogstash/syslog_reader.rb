@@ -2,14 +2,17 @@
 # A single socket reader.
 #
 class Syslogstash::SyslogReader
-  include ServiceSkeleton::BackgroundWorker
+  include ServiceSkeleton::LoggingHelpers
 
   class UnparseableMessage < StandardError; end
 
-  def initialize(config, logstash, metrics)
-    @config, @logstash, @metrics = config, logstash, metrics
-
-    @logger = config.logger
+  def initialize(config, logstash, metrics, logger)
+    @config   = config
+    @logstash = logstash
+    @metrics  = metrics
+    @logger   = logger
+    puts "config: #{config}"
+    puts "metrics: #{metrics}"
 
     @shutdown_reader, @shutdown_writer = IO.pipe
 
@@ -17,7 +20,6 @@ class Syslogstash::SyslogReader
     @udp_socket = nil
     @unix_socket = nil
 
-    super
     logger.debug(logloc) { "initialized" }
   end
 

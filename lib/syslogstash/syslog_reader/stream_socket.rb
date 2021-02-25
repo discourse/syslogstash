@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 class Syslogstash::SyslogReader::StreamSocket
+  include ServiceSkeleton::LoggingHelpers
+
   def initialize(fd, logger)
     @buffer = ''
     @fd = fd
@@ -92,10 +94,5 @@ class Syslogstash::SyslogReader::StreamSocket
       yield @buffer
       @buffer = ''
     end
-  end
-
-  def logloc
-    loc = caller_locations.first
-    "#{self.class}##{loc.label}"
   end
 end

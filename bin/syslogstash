@@ -3,7 +3,7 @@
 require 'syslogstash'
 
 begin
-  Syslogstash.new(ENV).start
+  ServiceSkeleton::Runner.new(Syslogstash, ENV).run if __FILE__ == $0
 rescue ServiceSkeleton::Error::InvalidEnvironmentError => ex
   $stderr.puts "Configuration error: #{ex.message}"
   exit 1
