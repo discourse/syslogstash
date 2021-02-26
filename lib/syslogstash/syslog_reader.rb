@@ -1,6 +1,12 @@
 # frozen_string_literal: true
+
 # A single socket reader.
 #
+
+require 'deep_merge'
+
+TIMESTAMP_FORMAT = '%FT%T.%3NZ'
+
 class Syslogstash::SyslogReader
   include ServiceSkeleton::BackgroundWorker
 
@@ -119,6 +125,23 @@ class Syslogstash::SyslogReader
     @shutdown_writer.close
   end
 
+  def parse_timestamp(t)
+    return Time.now.utc if t.nil?
+
+    begin
+      if t.start_with? '*'
+        # unsynced timestamp from IOS, is useless
+        Time.now.utc
+      else
+        # DateTime does a fairly sensible job of this
+        DateTime.parse(t)
+      end
+    rescue
+      # as good a fallback as any
+      Time.now.utc
+    end
+  end
+
   private
 
   attr_reader :config, :logger
@@ -192,15 +215,25 @@ class Syslogstash::SyslogReader
           [nil, nil, nil, content]
         end
 
-      log_entry(
-        syslog_timestamp: timestamp,
-        severity:         flags % 8,
-        facility:         flags / 8,
-        hostname:         hostname,
-        program:          program,
-        pid:              pid.nil? ? nil : pid.to_i,
-        message:          message,
-      )
+      log = {
+        '@timestamp': parse_timestamp(timestamp).strftime(TIMESTAMP_FORMAT),
+        log: {
+          original: msg,
+          syslog: {
+            severity: {
+              code: flags % 8,
+            },
+            facility: {
+              code: flags / 8,
+            },
+          },
+        },
+        message: message,
+      }
+      log.deep_merge({ host: { hostname: hostname } }) unless hostname.nil?
+      log.deep_merge({ process: { pid: pid.to_i } }) unless pid.nil?
+      log.deep_merge({ process: { name: program } }) unless program.nil?
+      log_entry(log)
     elsif msg =~ /\A<(\d+)>(\d+): (?:([^ :]+): )?(\*?\w{3} [ 0-9]{2} [0-9:]{8}\.[0-9]{3}): (.*)\z/m
       # aforementioned special snowflake: Cisco IOS
       # e.g.: <157>6223: switch01.sjc3: Sep 16 18:35:06.954: %PARSER-5-CFGLOG_LOGGEDCMD: command
@@ -220,20 +253,28 @@ class Syslogstash::SyslogReader
           [nil, content]
         end
 
-      if timestamp.start_with? '*'
-        timestamp = Time.now.utc.strftime('%b %e %H:%M:%S')
-      end
+      log = {
+        '@timestamp': parse_timestamp(timestamp).strftime(TIMESTAMP_FORMAT),
+        event: {
+          sequence: seq_num.to_i,
+        },
+        log: {
+          original: msg,
+          syslog: {
+            severity: {
+              code: flags % 8,
+            },
+            facility: {
+              code: flags / 8,
+            },
+          },
+        },
+        message: message,
+      }
+      log.deep_merge({ host: { hostname: hostname } }) unless hostname.nil?
+      log.deep_merge({ process: { name: program } }) unless program.nil?
+      log_entry(log)
 
-      log_entry(
-        syslog_timestamp: timestamp,
-        severity:         flags % 8,
-        facility:         flags / 8,
-        hostname:         hostname,
-        program:          program,
-        pid:              nil,
-        message:          message,
-        #seq_num:          seq_num, # (deliberately leaving this noise out)
-      )
     elsif msg =~ /\A<(\d+)>(\S+)\[(\d+)\]: (.*)\z/m
       # ANOTHER SNOWFLAKE: Mellanox Onyx doesn't send a timestamp OR a hostname
       # try and make this regex as specific as possible to avoid snaring other things
@@ -258,14 +299,28 @@ class Syslogstash::SyslogReader
       message   = $4
 
       log_entry(
-        syslog_timestamp: timestamp,
-        severity:         flags % 8,
-        facility:         flags / 8,
-        hostname:         hostname,
-        program:          program,
-        pid:              pid,
-        message:          message,
+        '@timestamp': parse_timestamp(timestamp).strftime(TIMESTAMP_FORMAT),
+        log: {
+          original: msg,
+          syslog: {
+            facility: {
+              code: flags / 8,
+            },
+            severity: {
+              code: flags % 8,
+            },
+          },
+        },
+        host: {
+          hostname: hostname,
+        },
+        message: message,
+        process: {
+          name: program,
+          pid: pid,
+        }
       )
+
     else
       raise UnparseableMessage
     end
@@ -288,15 +343,27 @@ class Syslogstash::SyslogReader
 
   def log_entry(h)
     {}.tap do |e|
-      e['@version']   = '1'
-      e['@timestamp'] = Time.now.utc.strftime("%FT%T.%LZ")
-
-      h[:facility_name] = FACILITIES[h[:facility]]
-      h[:severity_name] = SEVERITIES[h[:severity]]
-
-      e.merge!(h.delete_if { |k,v| v.nil? })
-      e.merge!(config.add_fields)
-
+      e.deep_merge({
+        ecs: {
+          version: '1.8'
+        },
+        event: {
+          created: Time.now.utc.strftime(TIMESTAMP_FORMAT)
+        },
+        log: {
+          logger: 'Syslogstash',
+          syslog: {
+            facility: {
+              name: FACILITIES[h[:log][:syslog][:facility][:code]],
+            },
+            severity: {
+              name: SEVERITIES[h[:log][:syslog][:severity][:code]],
+            },
+          },
+        },
+      })
+      e.deep_merge!(h)
+      e.deep_merge!(config.add_fields)
       logger.debug(logloc) { "Complete log entry is: #{e.inspect}" }
     end
   end

@@ -1,7 +1,10 @@
+# frozen_string_literal: true
+
 require_relative './spec_helper'
-require "ostruct"
 
 require 'syslogstash'
+
+ECS_VERSION = '1.8'
 
 class MockConfig
   attr_accessor :drop_regex
@@ -12,7 +15,7 @@ class MockConfig
   end
 
   def syslog_socket
-    "/somewhere/funny".dup
+    '/somewhere/funny'
   end
 
   def relay_to_stdout
@@ -54,199 +57,394 @@ describe Syslogstash::SyslogReader do
   let(:reader) { Syslogstash::SyslogReader.new(mock_config, mock_writer, mock_metrics) }
 
   it "parses an all-features-on message" do
+    msg = "<74>Jan  2 03:04:05 myhost myprogram[12345]: I'm on a boat!"
     expect(mock_writer)
-      .to receive(:send_event) do |msg|
-        expect(msg['@version']).to eq('1')
-        expect(msg['@timestamp']).to match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
-
-        expect(msg[:hostname]).to eq('myhost')
-        expect(msg[:program]).to eq('myprogram')
-        expect(msg[:pid]).to eq(12345)
-        expect(msg[:syslog_timestamp]).to eq('Jan  2 03:04:05')
-        expect(msg[:message]).to eq("I'm on a boat!")
-        expect(msg[:severity_name]).to eq('crit')
-        expect(msg[:facility_name]).to eq('cron')
-      end
-
-    reader.send(:process_message, "<74>Jan  2 03:04:05 myhost myprogram[12345]: I'm on a boat!")
+      .to receive(:send_event)
+      .with(
+        '@timestamp': "#{Time.now.year}-01-02T03:04:05.000Z",
+        ecs: {
+          version: ECS_VERSION,
+        },
+        event: {
+          created: match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
+        },
+        log: {
+          logger: 'Syslogstash',
+          original: msg,
+          syslog: {
+            facility: {
+              code: 9,
+              name: 'cron',
+            },
+            severity: {
+              code: 2,
+              name: 'crit',
+            },
+          },
+        },
+        host: {
+          hostname: 'myhost',
+        },
+        message: "I'm on a boat!",
+        process: {
+          name: 'myprogram',
+          pid: 12345,
+        },
+      )
+    reader.send(:process_message, msg)
   end
 
   it "parses a no-PID message" do
+    msg = "<74>Jan  2 03:04:05 myhost myprogram: I'm on a boat!"
     expect(mock_writer)
-      .to receive(:send_event) do |msg|
-        expect(msg['@version']).to eq('1')
-        expect(msg['@timestamp']).to match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
-
-        expect(msg[:hostname]).to eq('myhost')
-        expect(msg[:program]).to eq('myprogram')
-        expect(msg).to_not have_key(:pid)
-        expect(msg[:syslog_timestamp]).to eq('Jan  2 03:04:05')
-        expect(msg[:message]).to eq("I'm on a boat!")
-        expect(msg[:severity_name]).to eq('crit')
-        expect(msg[:facility_name]).to eq('cron')
-      end
-
-    reader.send(:process_message, "<74>Jan  2 03:04:05 myhost myprogram: I'm on a boat!")
+      .to receive(:send_event)
+      .with(
+        '@timestamp': "#{Time.now.year}-01-02T03:04:05.000Z",
+        ecs: {
+          version: ECS_VERSION,
+        },
+        event: {
+          created: match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
+        },
+        log: {
+          logger: 'Syslogstash',
+          original: msg,
+          syslog: {
+            facility: {
+              code: 9,
+              name: 'cron',
+            },
+            severity: {
+              code: 2,
+              name: 'crit',
+            },
+          },
+        },
+        host: {
+          hostname: 'myhost',
+        },
+        message: "I'm on a boat!",
+        process: {
+          name: 'myprogram',
+        },
+      )
+    reader.send(:process_message, msg)
   end
 
   it "parses a no-program message" do
+    msg = "<74>Jan  2 03:04:05 myhost I'm on a boat!"
     expect(mock_writer)
-      .to receive(:send_event) do |msg|
-        expect(msg['@version']).to eq('1')
-        expect(msg['@timestamp']).to match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
-
-        expect(msg[:hostname]).to eq('myhost')
-        expect(msg).to_not have_key(:program)
-        expect(msg).to_not have_key(:pid)
-        expect(msg[:syslog_timestamp]).to eq('Jan  2 03:04:05')
-        expect(msg[:message]).to eq("I'm on a boat!")
-        expect(msg[:severity_name]).to eq('crit')
-        expect(msg[:facility_name]).to eq('cron')
-      end
-
-    reader.send(:process_message, "<74>Jan  2 03:04:05 myhost I'm on a boat!")
+      .to receive(:send_event)
+      .with(
+        '@timestamp': "#{Time.now.year}-01-02T03:04:05.000Z",
+        ecs: {
+          version: ECS_VERSION,
+        },
+        event: {
+          created: match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
+        },
+        log: {
+          logger: 'Syslogstash',
+          original: msg,
+          syslog: {
+            facility: {
+              code: 9,
+              name: 'cron',
+            },
+            severity: {
+              code: 2,
+              name: 'crit',
+            },
+          },
+        },
+        host: {
+          hostname: 'myhost',
+        },
+        message: "I'm on a boat!",
+      )
+    reader.send(:process_message, msg)
   end
 
   it "parses a (non-standard) no-hostname message" do
+    msg = "<74>Jan  2 03:04:05 myprogram[12345]: I'm on a boat!"
     expect(mock_writer)
-      .to receive(:send_event) do |msg|
-        expect(msg['@version']).to eq('1')
-        expect(msg['@timestamp']).to match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
-
-        expect(msg).to_not have_key(:hostname)
-        expect(msg[:program]).to eq('myprogram')
-        expect(msg[:pid]).to eq(12345)
-        expect(msg[:syslog_timestamp]).to eq('Jan  2 03:04:05')
-        expect(msg[:message]).to eq("I'm on a boat!")
-        expect(msg[:severity_name]).to eq('crit')
-        expect(msg[:facility_name]).to eq('cron')
-      end
-
-    reader.send(:process_message, "<74>Jan  2 03:04:05 myprogram[12345]: I'm on a boat!")
+      .to receive(:send_event)
+      .with(
+        '@timestamp': "#{Time.now.year}-01-02T03:04:05.000Z",
+        ecs: {
+          version: ECS_VERSION,
+        },
+        event: {
+          created: match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
+        },
+        log: {
+          logger: 'Syslogstash',
+          original: msg,
+          syslog: {
+            facility: {
+              code: 9,
+              name: 'cron',
+            },
+            severity: {
+              code: 2,
+              name: 'crit',
+            },
+          },
+        },
+        process: {
+          name: 'myprogram',
+          pid: 12345,
+        },
+        message: "I'm on a boat!",
+      )
+    reader.send(:process_message, msg)
   end
 
   it "parses an IOS message with hostname" do
+    msg = "<157>6214: switch01.sjc3: Sep 16 18:17:23.009: %SEC_LOGIN-5-LOGIN_SUCCESS: Login Success [user: admin]"
     expect(mock_writer)
-      .to receive(:send_event) do |msg|
-        expect(msg['@version']).to eq('1')
-        expect(msg['@timestamp']).to match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
+      .to receive(:send_event)
+      .with(
+        '@timestamp': "#{Time.now.year}-09-16T18:17:23.009Z",
 
-        expect(msg[:hostname]).to eq('switch01.sjc3')
-        expect(msg[:program]).to eq('SEC_LOGIN-5-LOGIN_SUCCESS')
-        expect(msg[:pid]).to be_nil
-        expect(msg[:syslog_timestamp]).to eq('Sep 16 18:17:23.009')
-        expect(msg[:message]).to eq("Login Success [user: admin]")
-        expect(msg[:severity_name]).to eq('notice')
-        expect(msg[:facility_name]).to eq('local3')
-      end
+        ecs: {
+          version: ECS_VERSION,
+        },
+        event: {
+          created: match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/),
+          sequence: 6214,
+        },
+        log: {
+          logger: 'Syslogstash',
+          original: msg,
+          syslog: {
+            facility: {
+              code: 19,
+              name: 'local3',
+            },
+            severity: {
+              code: 5,
+              name: 'notice',
+            },
+          },
+        },
+        host: {
+          hostname: 'switch01.sjc3',
+        },
+        process: {
+          name: 'SEC_LOGIN-5-LOGIN_SUCCESS',
+        },
+        message: 'Login Success [user: admin]',
+      )
 
-    reader.send(:process_message, "<157>6214: switch01.sjc3: Sep 16 18:17:23.009: %SEC_LOGIN-5-LOGIN_SUCCESS: Login Success [user: admin]")
+    reader.send(:process_message, msg)
   end
 
   it "parses an IOS message without hostname" do
+    msg = "<157>6214: Sep 16 18:17:23.009: %SEC_LOGIN-5-LOGIN_SUCCESS: Login Success [user: admin]"
     expect(mock_writer)
-      .to receive(:send_event) do |msg|
-        expect(msg['@version']).to eq('1')
-        expect(msg['@timestamp']).to match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
+      .to receive(:send_event)
+      .with(
+        '@timestamp': "#{Time.now.year}-09-16T18:17:23.009Z",
+        ecs: {
+          version: ECS_VERSION,
+        },
+        event: {
+          created: match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/),
+          sequence: 6214,
+        },
+        log: {
+          logger: 'Syslogstash',
+          original: msg,
+          syslog: {
+            facility: {
+              code: 19,
+              name: 'local3',
+            },
+            severity: {
+              code: 5,
+              name: 'notice',
+            },
+          },
 
-        expect(msg[:hostname]).to be_nil
-        expect(msg[:program]).to eq('SEC_LOGIN-5-LOGIN_SUCCESS')
-        expect(msg[:pid]).to be_nil
-        expect(msg[:syslog_timestamp]).to eq('Sep 16 18:17:23.009')
-        expect(msg[:message]).to eq("Login Success [user: admin]")
-        expect(msg[:severity_name]).to eq('notice')
-        expect(msg[:facility_name]).to eq('local3')
-      end
-
-    reader.send(:process_message, "<157>6214: Sep 16 18:17:23.009: %SEC_LOGIN-5-LOGIN_SUCCESS: Login Success [user: admin]")
+        },
+        process: {
+          name: 'SEC_LOGIN-5-LOGIN_SUCCESS',
+        },
+        message: 'Login Success [user: admin]',
+      )
+    reader.send(:process_message, msg)
   end
 
   it "fixes the time on a message with unsynced timestamp" do
+    msg = "<158>11600: *Apr 28 10:14:29.608: %DOT11-6-ASSOC: Interface Dot11Radio1, Station   c0ff.eec0.ffee Associated KEY_MGMT[WPAv2 PSK]"
     expect(mock_writer)
-      .to receive(:send_event) do |msg|
-        expect(msg['@version']).to eq('1')
-        expect(msg['@timestamp']).to match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
+      .to receive(:send_event) do |e|
+        expect(e).to match(
+          '@timestamp': instance_of(String),
+          ecs: {
+            version: ECS_VERSION,
+          },
+          event: {
+            created: match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/),
+            sequence: 11600,
+          },
+          log: {
+            logger: 'Syslogstash',
+            original: msg,
+            syslog: {
+              facility: {
+                code: 19,
+                name: 'local3',
+              },
+              severity: {
+                code: 6,
+                name: 'info',
+              },
+            },
+          },
+          process: {
+            name: 'DOT11-6-ASSOC',
+          },
+          message: 'Interface Dot11Radio1, Station   c0ff.eec0.ffee Associated KEY_MGMT[WPAv2 PSK]',
+        )
+      expect(e['@timestamp']).to_not eq('Apr 28 10:14:29.608')
+      expect(e['@timestamp']).to_not eq("#{Time.now.year}-04-28T10:14:29.608Z")
 
-        expect(msg[:hostname]).to be_nil
-        expect(msg[:program]).to eq('DOT11-6-ASSOC')
-        expect(msg[:pid]).to be_nil
-        expect(msg[:syslog_timestamp]).to_not eq('Apr 28 10:14:29.608')
-        expect(msg[:message]).to eq("Interface Dot11Radio1, Station   c0ff.eec0.ffee Associated KEY_MGMT[WPAv2 PSK]")
-        expect(msg[:severity_name]).to eq('info')
-        expect(msg[:facility_name]).to eq('local3')
       end
-
-    reader.send(:process_message, "<158>11600: *Apr 28 10:14:29.608: %DOT11-6-ASSOC: Interface Dot11Radio1, Station   c0ff.eec0.ffee Associated KEY_MGMT[WPAv2 PSK]")
+    reader.send(:process_message, msg)
   end
 
   it "adds information to a message with no timestamp or hostname received over IPv4" do
+    msg = "<189>snmpd[26572]: [snmpd.NOTICE]: Got SNMP request from ip 172.16.1.100"
     expect(mock_writer)
-      .to receive(:send_event) do |msg|
-        expect(msg['@version']).to eq('1')
-        expect(msg['@timestamp']).to match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
-
-        expect(msg[:hostname]).to eq '172.16.1.142'
-        expect(msg[:program]).to eq('snmpd')
-        expect(msg[:pid]).to eq 26572
-        expect(msg[:syslog_timestamp]).to eq('Jan  9 01:02:03')
-        expect(msg[:message]).to eq("[snmpd.NOTICE]: Got SNMP request from ip 172.16.1.100")
-        expect(msg[:severity_name]).to eq('notice')
-        expect(msg[:facility_name]).to eq('local7')
-      end
-
+      .to receive(:send_event)
+      .with(
+        '@timestamp': "#{Time.now.year}-01-09T01:02:03.000Z",
+        ecs: {
+          version: ECS_VERSION,
+        },
+        event: {
+          created: "2020-01-09T01:02:03.000Z",
+        },
+        host: {
+          hostname: '172.16.1.142'
+        },
+        log: {
+          logger: 'Syslogstash',
+          original: msg,
+          syslog: {
+            facility: {
+              code: 23,
+              name: 'local7',
+            },
+            severity: {
+              code: 5,
+              name: 'notice',
+            },
+          },
+        },
+        process: {
+          name: 'snmpd',
+          pid: 26572,
+        },
+        message: '[snmpd.NOTICE]: Got SNMP request from ip 172.16.1.100',
+      )
     locked_time = Time.utc(2020, 1, 9, 1, 2, 3)
     allow(Time).to receive(:now).and_return(locked_time)
     addrinfo = Addrinfo.new(Socket.sockaddr_in(54321, '172.16.1.142'))
-    reader.send(:process_message, "<189>snmpd[26572]: [snmpd.NOTICE]: Got SNMP request from ip 172.16.1.100", remote: addrinfo)
+    reader.send(:process_message, msg, remote: addrinfo)
   end
 
   it "adds information to a message with no timestamp or hostname received over IPv6" do
+    msg = "<189>snmpd[26572]: [snmpd.NOTICE]: Got SNMP request from ip 172.16.1.100"
     expect(mock_writer)
-      .to receive(:send_event) do |msg|
-        expect(msg['@version']).to eq('1')
-        expect(msg['@timestamp']).to match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
-
-        expect(msg[:hostname]).to eq '2001:db8::f00f:1'
-        expect(msg[:program]).to eq('snmpd')
-        expect(msg[:pid]).to eq 26572
-        expect(msg[:syslog_timestamp]).to eq('Jan  9 01:02:03')
-        expect(msg[:message]).to eq("[snmpd.NOTICE]: Got SNMP request from ip 172.16.1.100")
-        expect(msg[:severity_name]).to eq('notice')
-        expect(msg[:facility_name]).to eq('local7')
-      end
+      .to receive(:send_event)
+      .with(
+        '@timestamp': "#{Time.now.year}-01-09T01:02:03.000Z",
+        ecs: {
+          version: ECS_VERSION,
+        },
+        event: {
+          created: "2020-01-09T01:02:03.000Z",
+        },
+        host: {
+          hostname: '2001:db8::f00f:1'
+        },
+        log: {
+          logger: 'Syslogstash',
+          original: msg,
+          syslog: {
+            facility: {
+              code: 23,
+              name: 'local7',
+            },
+            severity: {
+              code: 5,
+              name: 'notice',
+            },
+          },
+        },
+        process: {
+          name: 'snmpd',
+          pid: 26572,
+        },
+        message: '[snmpd.NOTICE]: Got SNMP request from ip 172.16.1.100',
+      )
 
     locked_time = Time.utc(2020, 1, 9, 1, 2, 3)
     allow(Time).to receive(:now).and_return(locked_time)
     addrinfo = Addrinfo.new(Socket.sockaddr_in(54321, '2001:db8::f00f:1'))
-    reader.send(:process_message, "<189>snmpd[26572]: [snmpd.NOTICE]: Got SNMP request from ip 172.16.1.100", remote: addrinfo)
+    reader.send(:process_message, msg, remote: addrinfo)
   end
 
   it "adds information to a message with no timestamp or hostname received over a unix socket" do
     addrinfo = Addrinfo.new(Socket.sockaddr_un('/tmp/spec.socket'))
+    msg = "<141>metad[2466]: TID 139915579090752: [metad.NOTICE]: Sending final query response for msg_id '117065370' (no error, has resp)"
 
     expect(mock_writer)
-      .to receive(:send_event) do |msg|
-        expect(msg['@version']).to eq('1')
-        expect(msg['@timestamp']).to match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
-
-        expect(msg[:hostname]).to eq "#{addrinfo.getnameinfo.first}"
-        expect(msg[:program]).to eq('metad')
-        expect(msg[:pid]).to eq 2466
-        expect(msg[:syslog_timestamp]).to eq('Jan  9 01:02:03')
-        expect(msg[:message]).to eq("TID 139915579090752: [metad.NOTICE]: Sending final query response for msg_id '117065370' (no error, has resp)")
-        expect(msg[:severity_name]).to eq('notice')
-        expect(msg[:facility_name]).to eq('local1')
-      end
+      .to receive(:send_event)
+      .with(
+        '@timestamp': "#{Time.now.year}-01-09T01:02:03.000Z",
+        ecs: {
+          version: ECS_VERSION,
+        },
+        event: {
+          created: "2020-01-09T01:02:03.000Z",
+        },
+        host: {
+          hostname: addrinfo.getnameinfo.first
+        },
+        log: {
+          logger: 'Syslogstash',
+          original: msg,
+          syslog: {
+            facility: {
+              code: 17,
+              name: 'local1',
+            },
+            severity: {
+              code: 5,
+              name: 'notice',
+            },
+          },
+        },
+        process: {
+          name: 'metad',
+          pid: 2466,
+        },
+        message: "TID 139915579090752: [metad.NOTICE]: Sending final query response for msg_id '117065370' (no error, has resp)",
+      )
 
     locked_time = Time.utc(2020, 1, 9, 1, 2, 3)
     allow(Time).to receive(:now).and_return(locked_time)
-    reader.send(:process_message, "<141>metad[2466]: TID 139915579090752: [metad.NOTICE]: Sending final query response for msg_id '117065370' (no error, has resp)", remote: addrinfo)
+    reader.send(:process_message, msg, remote: addrinfo)
   end
 
   it "parses a multi-line message" do
     expect(mock_writer)
-      .to receive(:send_event) do |msg|
-        expect(msg[:message]).to eq("This is\na multiline\nmessage!")
+      .to receive(:send_event) do |e|
+        expect(e[:message]).to eq("This is\na multiline\nmessage!")
       end
 
     reader.send(:process_message, "<74>Jan  2 03:04:05 myhost This is\na multiline\nmessage!")
@@ -254,8 +452,8 @@ describe Syslogstash::SyslogReader do
 
   it "parses an invalid UTF-8 message" do
     expect(mock_writer)
-      .to receive(:send_event) do |msg|
-        expect(msg[:message]).to eq("This is br\uFFFDken")
+      .to receive(:send_event) do |e|
+        expect(e[:message]).to eq("This is br\uFFFDken")
       end
 
     reader.send(:process_message, "<74>Jan  2 03:04:05 myhost This is br\xE2ken")
@@ -271,7 +469,6 @@ describe Syslogstash::SyslogReader do
       reader.send(:process_message, "<74>Jan  2 03:04:05 myhost myprogram[12345]: any7thing")
       reader.send(:process_message, "<74>Jan  2 03:04:05 myhost myprogram[12345]: full of bombs and keys")
     end
-
   end
 
   context "with some tags" do
@@ -281,9 +478,9 @@ describe Syslogstash::SyslogReader do
 
     it "includes the tags" do
       expect(mock_writer)
-        .to receive(:send_event) do |msg|
-         expect(msg[:foo]).to eq('bar')
-         expect(msg[:baz]).to eq('wombat')
+        .to receive(:send_event) do |e|
+          expect(e[:foo]).to eq('bar')
+          expect(e[:baz]).to eq('wombat')
         end
 
       reader.send(:process_message, "<74>Jan  2 03:04:05 myhost myprogram[12345]: I'm on a boat!")
