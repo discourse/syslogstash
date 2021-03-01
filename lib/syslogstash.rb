@@ -29,32 +29,30 @@ class Syslogstash
     logger.info(logloc) { "SIGURG received; relay_to_stdout is now #{config.relay_to_stdout.inspect}" }
   end
 
-  def initialize(*_)
-    super
+  def self.register_ultravisor_children(ultravisor, config:, metrics_registry:)
+    ultravisor.add_child(
+      id: :syslogstash_logstash_writer,
+      klass: LogstashWriter,
+      method: :run,
+      args: [server_name: config.logstash_server, backlog: config.backlog_size, logger: config.logger, metrics_registry: metrics_registry, metrics_prefix: :syslogstash_writer],
+      shutdown: { 
+        method: :shutdown,
+        timeout: 10,
+      }
+    )
 
-    @shutdown_reader, @shutdown_writer = IO.pipe
+    writer = ultravisor[:syslogstash_logstash_writer]
 
-    @writer = LogstashWriter.new(server_name: config.logstash_server, backlog: config.backlog_size, logger: logger, metrics_registry: metrics, metrics_prefix: :syslogstash_writer)
-    @reader = SyslogReader.new(config, @writer, metrics)
-  end
-
-  def run
-    @writer.start!
-    @reader.start!
-
-    @shutdown_reader.getc
-    @shutdown_reader.close
-  end
-
-  def shutdown
-    @reader.stop!
-    @writer.stop!
-
-    @shutdown_writer.close
-  end
-
-  def force_disconnect!
-    @writer.force_disconnect!
+    ultravisor.add_child(
+      id: :syslog_reader,
+      klass: SyslogReader,
+      method: :run,
+      args: [config, writer, metrics_registry],
+      shutdown: {
+        method: :shutdown,
+        timeout: 1,
+      }
+    )
   end
 end
 
