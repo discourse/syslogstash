@@ -34,15 +34,16 @@ class Syslogstash::SyslogReader
     logger.debug(logloc) { "off we go!" }
 
     begin
+      slen = config.syslog_socket.length
       if config.syslog_socket.start_with? 'tcp+udp/'
-        port = config.syslog_socket.slice(8..).to_i # lop off tcp+udp/
+        port = config.syslog_socket.slice(8..slen).to_i # lop off tcp+udp/
         start_tcp(port)
         start_udp(port)
       elsif config.syslog_socket.start_with? 'tcp/'
-        port = config.syslog_socket.slice(4..).to_i # lop off tcp/
+        port = config.syslog_socket.slice(4..slen).to_i # lop off tcp/
         start_tcp(port)
       elsif config.syslog_socket.start_with? 'udp/'
-        port = config.syslog_socket.slice(4..).to_i # lop off udp/
+        port = config.syslog_socket.slice(4..slen).to_i # lop off udp/
         start_udp(port)
       elsif config.syslog_socket.start_with? '/' # treat as a filename
         start_unix(config.syslog_socket)
