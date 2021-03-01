@@ -2,7 +2,7 @@
 require 'uri'
 require 'socket'
 require 'json'
-require 'thwait'
+
 require 'logstash_writer'
 require 'service_skeleton'
 
