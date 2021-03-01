@@ -38,17 +38,31 @@ class Syslogstash
     @reader = SyslogReader.new(config, @writer, metrics)
   end
 
+  def self.register_ultravisor_children(ultravisor, config:, metrics_registry:)
+    ultravisor.add_child(
+      id: self.service_name.to_sym,
+      klass: self,
+      method: :run,
+      args: [config: config, metrics: metrics_registry],
+      access: :unsafe,
+      shutdown: {
+        method: :shutdown,
+        timeout: 1,
+      }
+    )
+  end
+
   def run
-    @writer.start!
-    @reader.start!
+    @writer.shutdown
+    @reader.shutdown
 
     @shutdown_reader.getc
     @shutdown_reader.close
   end
 
   def shutdown
-    @reader.stop!
-    @writer.stop!
+    @reader.shutdown
+    @writer.shutdown
 
     @shutdown_writer.close
   end
