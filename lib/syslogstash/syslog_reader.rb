@@ -30,7 +30,7 @@ class Syslogstash::SyslogReader
 
   # Start reading from the socket, parsing entries, and flinging
   # them at logstash.
-  def start!
+  def run
     logger.debug(logloc) { "off we go!" }
 
     begin
@@ -337,7 +337,9 @@ class Syslogstash::SyslogReader
         logger.debug(logloc) { "dropping message #{msg}" }
         return
       end
-      @logstash.send_event(log_entry)
+      # `unsafe_instance` is Ultravisor's way of telling us to be careful
+      # In this case, we know that `send_event` is designed to be threadsafe
+      @logstash.unsafe_instance.send_event(log_entry)
     rescue UnparseableMessage
       logger.warn(logloc) { "Unparseable message: #{msg.inspect}" }
     end
