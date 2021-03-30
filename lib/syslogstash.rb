@@ -35,7 +35,7 @@ class Syslogstash
       klass: LogstashWriter,
       method: :run,
       args: [server_name: config.logstash_server, backlog: config.backlog_size, logger: config.logger, metrics_registry: metrics_registry, metrics_prefix: :syslogstash_writer],
-      shutdown: { 
+      shutdown: {
         method: :shutdown,
         timeout: 10,
       }

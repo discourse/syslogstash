@@ -52,10 +52,15 @@ end
 
 describe Syslogstash::SyslogReader do
   let(:mock_writer) { instance_double(LogstashWriter) }
+  let(:mock_uchild) do
+    instance_double(Ultravisor::Child).tap do |i|
+      allow(i).to receive(:unsafe_instance).and_return(mock_writer)
+    end
+  end
   let(:logger) { Logger.new('/dev/null') }
   let(:mock_config) { MockConfig.new(logger) }
   let(:mock_metrics) { MockMetrics.new }
-  let(:reader) { Syslogstash::SyslogReader.new(mock_config, mock_writer, mock_metrics) }
+  let(:reader) { Syslogstash::SyslogReader.new(mock_config, mock_uchild, mock_metrics) }
 
   it "parses an all-features-on message" do
     msg = "<74>Jan  2 03:04:05 myhost myprogram[12345]: I'm on a boat!"

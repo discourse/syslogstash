@@ -339,7 +339,7 @@ class Syslogstash::SyslogReader
       end
       # `unsafe_instance` is Ultravisor's way of telling us to be careful
       # In this case, we know that `send_event` is designed to be threadsafe
-      @logstash.unsafe_instance.send_event(log_entry) 
+      @logstash.unsafe_instance.send_event(log_entry)
     rescue UnparseableMessage
       logger.warn(logloc) { "Unparseable message: #{msg.inspect}" }
     end
